@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from "react";
-import { Settings2, Save, Check, Zap, Power, Search, Send, Trash2 } from "lucide-react";
+import { Settings2, Save, Check, Zap, Power, Search, Send } from "lucide-react";
 import { COLORS } from "../../constants/colors.js";
 import { Card, CardHeader } from "../ui/Card.jsx";
 import { taStyle, btnSubmitStyle } from "../../styles/forms.js";
@@ -29,7 +29,7 @@ function InactivityCleanupCard() {
         "content-type": "application/json",
         "x-sofia-secret": import.meta.env.VITE_SOFIA_SECRET,
       },
-      body: JSON.stringify({ dryRun, mode: "closeDirect" }),
+      body: JSON.stringify({ dryRun }),
     });
     const data = await res.json();
     if (!res.ok || data.error) throw new Error(data.error || "Error desconocido");
@@ -120,12 +120,6 @@ function InactivityCleanupCard() {
             <strong>{result.openConversations}</strong> conversaciones abiertas revisadas —{" "}
             <strong>{result.staleConversations}</strong> sin actividad hace 24h+.
           </p>
-          {result.alreadyPendingClosure > 0 && (
-            <p style={{ fontSize: 13, color: COLORS.textMuted, margin: 0 }}>
-              <Trash2 size={12} style={{ verticalAlign: "middle", marginRight: 4 }} />
-              {result.alreadyPendingClosure} ya en proceso de cierre — no se tocan de nuevo.
-            </p>
-          )}
           {result.dryRun ? (
             <p style={{ fontSize: 13, color: COLORS.gold, margin: 0, fontWeight: 600 }}>
               Se cerrarían {result.wouldWarn} conversación(es) nuevas. Nada se cerró todavía.

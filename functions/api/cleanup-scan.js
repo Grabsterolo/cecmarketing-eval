@@ -9,7 +9,7 @@ export async function onRequestPost({ request, env }) {
     });
   }
 
-  const { dryRun, mode } = await request.json();
+  const { dryRun } = await request.json();
 
   const res = await fetch("https://cec-sofia-whatsapp.jpgamboa1309.workers.dev/cleanup/scan-and-warn", {
     method: "POST",
@@ -17,7 +17,7 @@ export async function onRequestPost({ request, env }) {
       "content-type": "application/json",
       "x-cleanup-secret": env.CLEANUP_TRIGGER_SECRET,
     },
-    body: JSON.stringify({ dryRun: dryRun !== false, mode }),
+    body: JSON.stringify({ dryRun: dryRun !== false }),
   });
 
   const data = await res.json();
