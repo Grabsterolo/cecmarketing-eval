@@ -48,6 +48,12 @@ const ESCALATION_RULES = [
   { label: "Precio sin promoción vigente", test: (s) => s.includes("precio") && s.includes("promocion") },
   { label: "Precio de cirugía", test: (s) => s.includes("precio") && (s.includes("cirugia") || s.includes("quirurg")) },
   { label: "Límite de conversación alcanzado", test: (s) => s.includes("limite") || s.includes("mensajes") },
+  // Sofía dijo una frase de traspaso ("le voy a pasar la información al
+  // equipo", etc.) sin la etiqueta [ESCALAR] — cec-sofia-whatsapp lo detecta
+  // y fuerza la escalación de todas formas (ver mentionsHandoffPromise en
+  // ese repo, fix 2026-08-11). Bucket propio para que este volumen no se
+  // pierda dentro de "Otro".
+  { label: "Traspaso detectado automáticamente", test: (s) => s.includes("traspaso") },
   { label: "Síntoma o emergencia post-operatoria", test: (s) => s.includes("sintoma") || s.includes("dolor") || s.includes("molestia") || s.includes("emergencia") },
   { label: "Agendar valoración", test: (s) => s.includes("valoracion") || s.includes("agendar") },
 ];
