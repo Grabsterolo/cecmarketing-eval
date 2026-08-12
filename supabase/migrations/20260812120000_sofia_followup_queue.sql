@@ -2,16 +2,67 @@
 -- quedaron abiertas sin venta, más el estado de seguimiento que el equipo
 -- comercial le da a cada una.
 --
--- NO aplicar automáticamente a producción — este archivo es para revisión.
--- Una vez aprobado, aplicar con `apply_migration` (Supabase MCP) o pegando
--- el contenido en el SQL Editor del proyecto wuradlaomyoxkiagqvyi.
+-- Aplicada al proyecto wuradlaomyoxkiagqvyi vía apply_migration (Supabase MCP).
 --
 -- No modifica ni elimina sofia_followup_candidates (se verificó que no
 -- tiene consumidores en src/, pero puede tener otros — se deja intacta).
 -- No agrega columnas a sofia_conversations (la escribe el Worker de Sofía).
 
 -- ============================================================
--- 1. Vista: sofia_followup_queue
+-- 1. Tabla: sofia_followup_status
+-- ============================================================
+-- Va primero porque la vista de abajo hace LEFT JOIN contra esta tabla —
+-- tiene que existir antes de que se pueda crear la vista.
+create table if not exists public.sofia_followup_status (
+  conversation_id uuid primary key references public.sofia_conversations(id) on delete cascade,
+  estado text not null default 'pendiente'
+    check (estado in ('pendiente','contactado','agendo','descartado','no_contactable')),
+  nota text,
+  actualizado_por text,
+  updated_at timestamptz not null default now(),
+  created_at timestamptz not null default now()
+);
+
+create index if not exists sofia_followup_status_estado_idx on public.sofia_followup_status (estado);
+create index if not exists sofia_followup_status_updated_at_idx on public.sofia_followup_status (updated_at desc);
+
+alter table public.sofia_followup_status enable row level security;
+
+-- RLS obligatorio, sin acceso a anon (mismo patrón que sofia_config) —
+-- ver el hallazgo abierto de sofia_inactivity_cleanup, que quedó sin RLS.
+create policy "Authenticated users can read sofia_followup_status"
+  on public.sofia_followup_status for select
+  using (auth.role() = 'authenticated');
+
+create policy "Authenticated users can insert sofia_followup_status"
+  on public.sofia_followup_status for insert
+  with check (auth.role() = 'authenticated');
+
+create policy "Authenticated users can update sofia_followup_status"
+  on public.sofia_followup_status for update
+  using (auth.role() = 'authenticated');
+
+-- search_path fijo a 'public' — hardening estándar contra search_path
+-- hijacking (WARN del linter de Supabase); sin efecto funcional acá porque
+-- la función no referencia objetos sin calificar.
+create or replace function public.set_sofia_followup_status_updated_at()
+returns trigger
+language plpgsql
+set search_path = public
+as $$
+begin
+  new.updated_at = now();
+  return new;
+end;
+$$;
+
+drop trigger if exists sofia_followup_status_set_updated_at on public.sofia_followup_status;
+create trigger sofia_followup_status_set_updated_at
+  before update on public.sofia_followup_status
+  for each row execute function public.set_sofia_followup_status_updated_at();
+
+-- ============================================================
+-- 2. Vista: sofia_followup_queue
 -- ============================================================
 -- Une dos orígenes de seguimiento sobre sofia_conversations:
 --   A) 'escalada_sin_cita'   — Sofía escaló pidiendo precio/agendar/cita/
@@ -146,47 +197,10 @@ from scored
 left join public.sofia_followup_status st on st.conversation_id = scored.id
 order by scored.score desc, scored.created_at desc;
 
--- ============================================================
--- 2. Tabla: sofia_followup_status
--- ============================================================
-create table if not exists public.sofia_followup_status (
-  conversation_id uuid primary key references public.sofia_conversations(id) on delete cascade,
-  estado text not null default 'pendiente'
-    check (estado in ('pendiente','contactado','agendo','descartado','no_contactable')),
-  nota text,
-  actualizado_por text,
-  updated_at timestamptz not null default now(),
-  created_at timestamptz not null default now()
-);
-
-create index if not exists sofia_followup_status_estado_idx on public.sofia_followup_status (estado);
-create index if not exists sofia_followup_status_updated_at_idx on public.sofia_followup_status (updated_at desc);
-
-alter table public.sofia_followup_status enable row level security;
-
--- RLS obligatorio, sin acceso a anon (mismo patrón que sofia_config) —
--- ver el hallazgo abierto de sofia_inactivity_cleanup, que quedó sin RLS.
-create policy "Authenticated users can read sofia_followup_status"
-  on public.sofia_followup_status for select
-  using (auth.role() = 'authenticated');
-
-create policy "Authenticated users can insert sofia_followup_status"
-  on public.sofia_followup_status for insert
-  with check (auth.role() = 'authenticated');
-
-create policy "Authenticated users can update sofia_followup_status"
-  on public.sofia_followup_status for update
-  using (auth.role() = 'authenticated');
-
-create or replace function public.set_sofia_followup_status_updated_at()
-returns trigger as $$
-begin
-  new.updated_at = now();
-  return new;
-end;
-$$ language plpgsql;
-
-drop trigger if exists sofia_followup_status_set_updated_at on public.sofia_followup_status;
-create trigger sofia_followup_status_set_updated_at
-  before update on public.sofia_followup_status
-  for each row execute function public.set_sofia_followup_status_updated_at();
+-- Por defecto las vistas en Postgres corren con los permisos de su dueño,
+-- no de quien las consulta ("security definer" implícito) — eso podría
+-- bypasear el RLS de sofia_followup_status/sofia_conversations para
+-- cualquiera con SELECT sobre la vista. security_invoker=true hace que
+-- respete el rol y el RLS de quien consulta (el advisor de seguridad de
+-- Supabase lo marcó como ERROR al aplicar esta migración por primera vez).
+alter view public.sofia_followup_queue set (security_invoker = true);
