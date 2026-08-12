@@ -12,11 +12,11 @@ export const NAV_ITEMS = [
   { key: "metricas-sofia", label: "Métricas Sofía", icon: MessageCircle },
   { key: "recomendaciones", label: "Recomendaciones", icon: Sparkles },
   { key: "leads-calientes", label: "Leads Potenciales", icon: Flame },
+  { key: "seguimiento", label: "Seguimiento", icon: PhoneCall },
   { key: "auditoria-sofia", label: "Auditoría de Sofía", icon: ShieldCheck },
   { key: "configurar-sofia", label: "Configurar a Sofía", icon: Settings2 },
   { key: "probar-sofia", label: "Probar a Sofía", icon: FlaskConical },
   { key: "cumpleanos", label: "Cumpleaños", icon: Cake },
-  { key: "seguimiento", label: "Seguimiento", icon: PhoneCall },
 ];
 
 // Fuentes de datos que el dashboard puede mostrar. "connected: false" hasta
