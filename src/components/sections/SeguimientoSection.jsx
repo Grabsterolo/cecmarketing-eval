@@ -439,12 +439,20 @@ export function SeguimientoSection({ profile }) {
   // Si alguna de las 4 queries falla (p.ej. la tabla/vista todavía no existe),
   // el KPI queda en null y se muestra "—" en vez de "0" — un 0 falso podría
   // leerse como "no hay pendientes" cuando en realidad la carga falló.
-  const loadKpis = useCallback(async () => {
+  //
+  // "Pendientes de contactar"/"Pendientes de cirugía" respetan el rango de
+  // fechas elegido (from/to) para no quedar como un conteo histórico abierto.
+  // "Contactados esta semana" y "Agendados desde el módulo" quedan fuera del
+  // rango a propósito: tienen su propio período con sentido (semana
+  // calendario / total histórico acumulado).
+  const loadKpis = useCallback(async (rangeFrom, rangeTo) => {
     setKpisLoading(true);
     const weekStart = `${startOfWeekISO()}T00:00:00-06:00`;
+    const rangeStart = `${rangeFrom}T00:00:00-06:00`;
+    const rangeEnd = `${rangeTo}T23:59:59-06:00`;
     const [pendientes, pendientesCirugia, contactadosSemana, agendados] = await Promise.all([
-      supabase.from("sofia_followup_queue").select("id", { count: "exact", head: true }).eq("estado", "pendiente"),
-      supabase.from("sofia_followup_queue").select("id", { count: "exact", head: true }).eq("estado", "pendiente").eq("categoria", "cirugia"),
+      supabase.from("sofia_followup_queue").select("id", { count: "exact", head: true }).eq("estado", "pendiente").gte("created_at", rangeStart).lte("created_at", rangeEnd),
+      supabase.from("sofia_followup_queue").select("id", { count: "exact", head: true }).eq("estado", "pendiente").eq("categoria", "cirugia").gte("created_at", rangeStart).lte("created_at", rangeEnd),
       supabase.from("sofia_followup_status").select("conversation_id", { count: "exact", head: true }).eq("estado", "contactado").gte("updated_at", weekStart),
       supabase.from("sofia_followup_status").select("conversation_id", { count: "exact", head: true }).eq("estado", "agendo"),
     ]);
@@ -461,7 +469,7 @@ export function SeguimientoSection({ profile }) {
     setKpisLoading(false);
   }, []);
 
-  useEffect(() => { loadKpis(); }, [loadKpis]);
+  useEffect(() => { loadKpis(from, to); }, [loadKpis, from, to]);
 
   useEffect(() => {
     (async () => {
@@ -491,10 +499,10 @@ export function SeguimientoSection({ profile }) {
       setRawRows(prevRows);
       setRowErrors((errs) => ({ ...errs, [conversationId]: upsertError.message }));
     } else if (patch.estado) {
-      loadKpis();
+      loadKpis(from, to);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [rawRows, actor, loadKpis]);
+  }, [rawRows, actor, loadKpis, from, to]);
 
   const filtered = useMemo(() => {
     const q = normalize(search);
@@ -522,10 +530,10 @@ export function SeguimientoSection({ profile }) {
 
       <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr 1fr" : "repeat(4,1fr)", gap: 16, marginBottom: 24 }}>
         <Card>
-          <MetricKpi label="Pendientes de contactar" value={kpisLoading || kpis.pendientes === null ? "—" : `${kpis.pendientes}`} sub="En toda la cola" />
+          <MetricKpi label="Pendientes de contactar" value={kpisLoading || kpis.pendientes === null ? "—" : `${kpis.pendientes}`} sub="En el rango elegido" />
         </Card>
         <Card>
-          <MetricKpi label="Pendientes de cirugía" value={kpisLoading || kpis.pendientesCirugia === null ? "—" : `${kpis.pendientesCirugia}`} sub="Sobre los pendientes" />
+          <MetricKpi label="Pendientes de cirugía" value={kpisLoading || kpis.pendientesCirugia === null ? "—" : `${kpis.pendientesCirugia}`} sub="Sobre los pendientes del rango" />
         </Card>
         <Card>
           <MetricKpi label="Contactados esta semana" value={kpisLoading || kpis.contactadosSemana === null ? "—" : `${kpis.contactadosSemana}`} sub="Desde el lunes" />
