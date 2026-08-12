@@ -1,5 +1,5 @@
 import {
-  Home, LayoutDashboard, Sparkles, Settings2, FlaskConical, ShieldCheck, Cake, Flame, MessageCircle,
+  Home, LayoutDashboard, Sparkles, Settings2, FlaskConical, ShieldCheck, Cake, Flame, MessageCircle, PhoneCall,
 } from "lucide-react";
 
 export const ROTATING_WORDS = ["campañas", "conversaciones", "métricas", "recomendaciones", "tu marca"];
@@ -16,6 +16,7 @@ export const NAV_ITEMS = [
   { key: "configurar-sofia", label: "Configurar a Sofía", icon: Settings2 },
   { key: "probar-sofia", label: "Probar a Sofía", icon: FlaskConical },
   { key: "cumpleanos", label: "Cumpleaños", icon: Cake },
+  { key: "seguimiento", label: "Seguimiento", icon: PhoneCall },
 ];
 
 // Fuentes de datos que el dashboard puede mostrar. "connected: false" hasta
