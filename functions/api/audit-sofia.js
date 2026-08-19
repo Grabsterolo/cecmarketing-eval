@@ -1,4 +1,11 @@
-export async function onRequestPost({ env }) {
+export async function onRequestPost({ request, env }) {
+  if (request.headers.get("x-sofia-secret") !== env.SOFIA_CHAT_SECRET) {
+    return new Response(JSON.stringify({ error: "Unauthorized" }), {
+      status: 401,
+      headers: { "content-type": "application/json" },
+    });
+  }
+
   const {
     SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY,
     ANTHROPIC_API_KEY,

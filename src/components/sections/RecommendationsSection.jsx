@@ -126,7 +126,10 @@ export function RecommendationsSection() {
   const generateAnalysis = async () => {
     setGenerating(true);
     try {
-      const res = await fetch("/api/daily-analysis", { method: "POST" });
+      const res = await fetch("/api/daily-analysis", {
+        method: "POST",
+        headers: { "x-sofia-secret": import.meta.env.VITE_SOFIA_SECRET },
+      });
       const data = await res.json();
       if (data.error) throw new Error(data.error);
       const { data: newData } = await supabase

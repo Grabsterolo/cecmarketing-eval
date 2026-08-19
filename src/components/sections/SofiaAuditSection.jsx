@@ -86,7 +86,10 @@ export function SofiaAuditSection() {
     setGenerating(true);
     setError(null);
     try {
-      const res = await fetch("/api/audit-sofia", { method: "POST" });
+      const res = await fetch("/api/audit-sofia", {
+        method: "POST",
+        headers: { "x-sofia-secret": import.meta.env.VITE_SOFIA_SECRET },
+      });
       const data = await res.json();
       if (data.error) throw new Error(data.error);
       await loadAudits();

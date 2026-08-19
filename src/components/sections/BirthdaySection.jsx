@@ -29,7 +29,10 @@ export function BirthdaySection() {
     try {
       const res = await fetch("/api/send-birthday", {
         method: "POST",
-        headers: { "content-type": "application/json" },
+        headers: {
+          "content-type": "application/json",
+          "x-sofia-secret": import.meta.env.VITE_SOFIA_SECRET,
+        },
         body: JSON.stringify({ phoneNumber: phoneNumber.trim() }),
       });
       const data = await res.json();
