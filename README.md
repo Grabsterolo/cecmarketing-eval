@@ -63,8 +63,38 @@ Requiere acceso de administrador a Meta Business Manager y a Google Ads / Analyt
 **Fase 4 — Motor de recomendaciones**
 Solo tiene sentido con datos reales de ambos lados (campañas + conversaciones) para cruzar. `RecommendationsSection.jsx` queda como placeholder hasta entonces.
 
+## Notas para sesiones futuras
+
+**2026-08-20 — Auditoría de métricas de Sofía (de dónde salen los datos, y qué no cuadraba).**
+Todo lo que muestra este dashboard sobre Sofía (Métricas Sofía, Leads
+Potenciales, Inicio, Seguimiento) lee directo de `sofia_conversations` /
+`sofia_whatsapp_sessions` en Supabase — es decir, de las conversaciones
+reales ya clasificadas por Claude (sentiment/escalated/procedure_interest),
+**no** de etiquetas de Zenvia. Zenvia solo aparece como link de salida
+(`VITE_ZENVIA_WEB_BASE_URL` + `prospect_id`) y en `conversion-stats.js`
+(proxy a `/stats/conversion` del Worker, construido pero **no** conectado
+a ninguna pantalla todavía).
+
+Se corrigieron dos cosas en este repo:
+- `SofiaMetricsSection.jsx` — "Motivos de escalación" mandaba 34% de las
+  escalaciones a "Otro" porque las reglas solo reconocían precio+promoción
+  o precio+cirugía; se agregó un bucket "Precio de tratamiento" para el
+  resto (ver commit `0e738b4`).
+- `DashboardHome.jsx` — "este mes" se calculaba con la medianoche local del
+  navegador en vez de Costa Rica, a diferencia del resto de las secciones
+  (ver commit `0e738b4`).
+
+La auditoría también encontró un bug real en el Worker
+**`cec-sofia-whatsapp`** (repo hermano, no vive acá): la deduplicación de
+webhooks por Workers KV no era atómica, y dos entregas concurrentes del
+mismo mensaje podían procesarse ambas (13 pares de filas duplicadas
+confirmadas en `sofia_conversations`, con respuestas de Claude distintas —
+posible doble mensaje real al paciente). Se arregló ahí, documentado en
+detalle en la sección **5p** del README de ese repo — leer eso antes de
+tocar `processInboundMessage()` o la deduplicación de interacciones.
+
 ## Pendientes generales del proyecto CEC (no específicos de este dashboard)
 
-- **Integrar a Sofía dentro de Zenvia** — agente de WhatsApp todavía no está conectado en producción al webhook de Zenvia Conversion. Es prerequisito para que `sofia_conversations` tenga datos reales.
 - Pedir a CEC acceso de administrador a Meta Business Manager y Google Ads / Analytics (bloquea Fase 3).
 - Workspace dedicado en la consola de Anthropic para separar el costo de Sofía del resto del uso de Claude.
+- Conectar `conversion-stats.js` a alguna pantalla del dashboard, o quitarlo si no se va a usar — hoy es un endpoint construido sin consumidor.
