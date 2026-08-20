@@ -56,6 +56,11 @@ const ESCALATION_RULES = [
   { label: "Traspaso detectado automáticamente", test: (s) => s.includes("traspaso") },
   { label: "Síntoma o emergencia post-operatoria", test: (s) => s.includes("sintoma") || s.includes("dolor") || s.includes("molestia") || s.includes("emergencia") },
   { label: "Agendar valoración", test: (s) => s.includes("valoracion") || s.includes("agendar") },
+  // Va al final: cualquier mención de precio que no calzó con las reglas más
+  // específicas de arriba (promoción/cirugía/agendar) — antes cualquier
+  // "solicitud de precio de Ultherapy/Trilipo/Oxígeno X/..." caía en "Otro"
+  // (34% de las escalaciones, ~40% de eso con "precio" en el texto).
+  { label: "Precio de tratamiento", test: (s) => s.includes("precio") },
 ];
 
 function classifyEscalationReason(reason) {

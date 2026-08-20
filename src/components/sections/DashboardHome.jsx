@@ -12,6 +12,16 @@ const SOURCE_DOT_COLORS = {
   sofia: SOURCE_COLORS.sofia,
 };
 
+// created_at se guarda en UTC pero el equipo opera en hora de Costa Rica
+// (UTC-6) — mismo patrón que SofiaMetricsSection/LeadsCalientesSection/
+// SeguimientoSection. Sin esto, "este mes" arrancaba en la medianoche local
+// del navegador de quien tuviera el dashboard abierto, no en la de Costa
+// Rica, y podía desfasarse contra el resto de las pantallas.
+function startOfMonthCR() {
+  const todayCR = new Date().toLocaleDateString("en-CA", { timeZone: "America/Costa_Rica" });
+  return `${todayCR.slice(0, 7)}-01T00:00:00-06:00`;
+}
+
 function ActiveBadge({ active }) {
   return (
     <Badge variant={active ? "success" : "default"}>
@@ -64,10 +74,7 @@ export function DashboardHome({ profile }) {
   useEffect(() => {
     let mounted = true;
     async function loadSofiaStats() {
-      const startOfMonth = new Date();
-      startOfMonth.setDate(1);
-      startOfMonth.setHours(0, 0, 0, 0);
-      const since = startOfMonth.toISOString();
+      const since = startOfMonthCR();
       const countQuery = () => supabase.from("sofia_conversations").select("*", { count: "exact", head: true }).gte("created_at", since);
 
       const [{ count: total }, { count: escalated }, { count: positivo }, { count: neutral }, { count: negativo }] = await Promise.all([
