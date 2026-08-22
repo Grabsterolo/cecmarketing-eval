@@ -57,13 +57,23 @@ Login, dashboard, sidebar, y la sección "Configurar a Sofía" ya funcionando co
 **Fase 2 — Conversaciones de Sofía**
 La sección ya está construida y lista para mostrar datos reales en cuanto el backend del webhook de WhatsApp empiece a escribir en la tabla `sofia_conversations`.
 
-**Fase 3 — Conectar Meta y Google** *(pendiente: acceso aún no otorgado por CEC)*
-Requiere acceso de administrador a Meta Business Manager y a Google Ads / Analytics. La sección `MetricsSection.jsx` está lista para recibir la integración real una vez haya acceso.
+**Fase 3 — Conectar Meta y Google** *(hecho — Meta en vivo; Google se retiró)*
+`MetricsSection.jsx` ("Métricas Meta" en el nav) corre con datos reales de Meta Ads, sin mock data (CPL, gráfico gasto vs leads, insight automático). Google Ads/Analytics se integró primero (commit `8da8f0b`) pero se quitó del dashboard por decisión de producto — "resultó poco práctico" (commit `2039363`), no por falta de acceso. `DATA_SOURCES` en `nav.js` solo lista `meta` y `sofia`, ambos `connected: true`.
 
-**Fase 4 — Motor de recomendaciones**
-Solo tiene sentido con datos reales de ambos lados (campañas + conversaciones) para cruzar. `RecommendationsSection.jsx` queda como placeholder hasta entonces.
+**Fase 4 — Motor de recomendaciones** *(hecho)*
+`RecommendationsSection.jsx` ya no es placeholder: muestra el análisis diario real de la tabla `sofia_recommendations`, generado por la función `daily-analysis`, que cruza el gasto/leads de Meta con los temas de conversación de Sofía (commit `2c6f093`, "cruzar Meta Ads con conversaciones de Sofía en el reporte diario").
 
 ## Notas para sesiones futuras
+
+**2026-08-22 — Ojo: el Roadmap de arriba se había quedado desactualizado.**
+Una sesión anterior le dijo al usuario que Meta/Google (Fase 3) y el motor de
+recomendaciones (Fase 4) seguían pendientes, citando este mismo README sin
+cruzarlo con el código. Era falso: Meta lleva conectado y en vivo desde hace
+semanas (ver `nav.js` → `DATA_SOURCES`), y `RecommendationsSection.jsx` ya
+muestra análisis reales. **Antes de reportar el estado de una integración,
+verificar contra `nav.js`/`git log`, no solo contra este README** — ya van
+dos veces que este documento se queda atrás de lo que dice el código (la
+otra fue el bullet de Zenvia, corregido el 2026-08-20 más abajo).
 
 **2026-08-20 — Auditoría de métricas de Sofía (de dónde salen los datos, y qué no cuadraba).**
 Todo lo que muestra este dashboard sobre Sofía (Métricas Sofía, Leads
@@ -95,6 +105,5 @@ tocar `processInboundMessage()` o la deduplicación de interacciones.
 
 ## Pendientes generales del proyecto CEC (no específicos de este dashboard)
 
-- Pedir a CEC acceso de administrador a Meta Business Manager y Google Ads / Analytics (bloquea Fase 3).
 - Workspace dedicado en la consola de Anthropic para separar el costo de Sofía del resto del uso de Claude.
 - Conectar `conversion-stats.js` a alguna pantalla del dashboard, o quitarlo si no se va a usar — hoy es un endpoint construido sin consumidor.
