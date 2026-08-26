@@ -246,7 +246,7 @@ const SELECT_STYLE = {
   outline: "none", fontFamily: "'Manrope', sans-serif", cursor: "pointer",
 };
 
-function FilterBar({ escalatedOnly, setEscalatedOnly, sentimentFilter, setSentimentFilter, scoreFilter, setScoreFilter }) {
+function FilterBar({ escalatedOnly, setEscalatedOnly, sentimentFilter, setSentimentFilter, scoreFilter, setScoreFilter, procedureFilter, setProcedureFilter }) {
   return (
     <div style={{ display: "flex", alignItems: "center", gap: 16, flexWrap: "wrap", marginBottom: 20 }}>
       <label style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 13, color: COLORS.text, fontFamily: "'Manrope', sans-serif", cursor: "pointer" }}>
@@ -271,6 +271,12 @@ function FilterBar({ escalatedOnly, setEscalatedOnly, sentimentFilter, setSentim
         <option value="alto">Alto (70+)</option>
         <option value="medio">Medio (40-69)</option>
         <option value="bajo">Bajo (&lt;40)</option>
+      </select>
+
+      <select value={procedureFilter} onChange={(e) => setProcedureFilter(e.target.value)} style={SELECT_STYLE}>
+        {PROCEDURE_GROUPS.map((g) => (
+          <option key={g.value} value={g.value}>{g.label}</option>
+        ))}
       </select>
     </div>
   );
@@ -443,6 +449,45 @@ function LeadRow({ conv }) {
   );
 }
 
+// Agrupaciones de procedure_interest. Claude escribe ese campo en texto libre,
+// así que el mismo procedimiento aparece con mayúsculas, acentos y orden de
+// palabras distintos ("MIA Femtech", "Aumento de senos Mia", "Mia® Femtech").
+// Cada grupo lista los fragmentos con los que se hace ilike; los patrones
+// salieron de los valores reales en la tabla, no de una lista teórica.
+//
+// Los grupos NO son mutuamente excluyentes a propósito: MIA Femtech es un
+// procedimiento mamario, así que esas conversaciones caen tanto en "MIA
+// Femtech" como en "Aumento mamario". Es intencional — permite ver el total
+// mamario o aislar MIA, según lo que se quiera medir.
+const PROCEDURE_GROUPS = [
+  { value: "todos", label: "Procedimiento: todos", patterns: null },
+  { value: "mia", label: "MIA Femtech", patterns: ["mia", "femtech"] },
+  {
+    value: "mamario",
+    label: "Aumento mamario (todo)",
+    patterns: ["aumento mamario", "aumento de senos", "aumento senos", "preservé", "preserve", "mastopexia", "armonización mamaria"],
+  },
+  { value: "abdominoplastia", label: "Abdominoplastia", patterns: ["abdominoplastia"] },
+  { value: "rinoplastia", label: "Rinoplastia", patterns: ["rinoplastia"] },
+  { value: "facial_qx", label: "Lifting facial / blefaroplastia", patterns: ["lifting facial", "blefaroplastia"] },
+  { value: "ultherapy", label: "Ultherapy", patterns: ["ultherapy"] },
+  {
+    value: "inyectables",
+    label: "Inyectables",
+    patterns: ["botox", "toxina", "hialurónico", "hialuronico", "radiesse", "harmonyca"],
+  },
+  {
+    value: "corporal_no_qx",
+    label: "Corporal no quirúrgico",
+    patterns: ["trilipo", "quantumrf", "lipopapada", "oxygeneo", "oxígeno", "liposucción papada"],
+  },
+  {
+    value: "sin_especificar",
+    label: "Sin especificar / general",
+    patterns: ["información general", "informacion general", "no especificado", "sin especificar", "consulta general", "información de precios", "consulta de precios"],
+  },
+];
+
 // Aplica los filtros que sí son columnas reales de sofia_conversations a un
 // query de Supabase ya iniciado (select/from). escalatedOnly reemplaza la
 // condición base de calificación (escalada O positiva+engagement) por
@@ -450,7 +495,7 @@ function LeadRow({ conv }) {
 // se puede aplicar acá porque no es una columna — se aplica después, en el
 // cliente, sobre la página ya traída (ver comentario junto a "visible" más
 // abajo, en LeadsCalientesSection).
-function applyServerFilters(query, { escalatedOnly, sentimentFilter }) {
+function applyServerFilters(query, { escalatedOnly, sentimentFilter, procedureFilter }) {
   let q = query
     .gte("created_at", LEADS_LIVE_SINCE)
     .or("derived_to_appointment.is.null,derived_to_appointment.eq.false");
@@ -461,6 +506,14 @@ function applyServerFilters(query, { escalatedOnly, sentimentFilter }) {
 
   if (sentimentFilter !== "todos") {
     q = q.eq("sentiment", sentimentFilter);
+  }
+
+  const group = PROCEDURE_GROUPS.find((g) => g.value === procedureFilter);
+  if (group?.patterns) {
+    // ilike con * a ambos lados = "contiene", insensible a mayúsculas. Varios
+    // .or() encadenados se combinan con AND entre sí, que es lo que queremos:
+    // (fecha) AND (calificación) AND (alguno de los patrones del grupo).
+    q = q.or(group.patterns.map((p) => `procedure_interest.ilike.*${p}*`).join(","));
   }
 
   return q;
@@ -476,19 +529,21 @@ export function LeadsCalientesSection() {
   const [escalatedOnly, setEscalatedOnly] = useState(false);
   const [sentimentFilter, setSentimentFilter] = useState("todos");
   const [scoreFilter, setScoreFilter] = useState("todos");
+  const [procedureFilter, setProcedureFilter] = useState("todos");
 
   // Cambiar cualquier filtro vuelve a la página 1 — si no, se puede quedar
   // viendo una página que ya no existe con el filtro nuevo.
   function updateEscalatedOnly(value) { setEscalatedOnly(value); setPage(1); }
   function updateSentimentFilter(value) { setSentimentFilter(value); setPage(1); }
   function updateScoreFilter(value) { setScoreFilter(value); setPage(1); }
+  function updateProcedureFilter(value) { setProcedureFilter(value); setPage(1); }
 
   useEffect(() => {
     (async () => {
       setLoading(true);
       setError(null);
 
-      const filters = { escalatedOnly, sentimentFilter };
+      const filters = { escalatedOnly, sentimentFilter, procedureFilter };
       const offset = (page - 1) * PAGE_SIZE;
 
       const [{ data, error: dataError }, { count, error: countError }] = await Promise.all([
@@ -514,7 +569,7 @@ export function LeadsCalientesSection() {
       }
       setLoading(false);
     })();
-  }, [page, escalatedOnly, sentimentFilter]);
+  }, [page, escalatedOnly, sentimentFilter, procedureFilter]);
 
   // Filtro de score y orden final: se hacen en el cliente sobre la página
   // ya traída de Supabase (20 filas), no sobre el total. Es una limitación
@@ -541,6 +596,7 @@ export function LeadsCalientesSection() {
         escalatedOnly={escalatedOnly} setEscalatedOnly={updateEscalatedOnly}
         sentimentFilter={sentimentFilter} setSentimentFilter={updateSentimentFilter}
         scoreFilter={scoreFilter} setScoreFilter={updateScoreFilter}
+        procedureFilter={procedureFilter} setProcedureFilter={updateProcedureFilter}
       />
 
       {error && <ErrorBanner>{error}</ErrorBanner>}
