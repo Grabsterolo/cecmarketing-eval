@@ -19,14 +19,25 @@ export async function onRequestPost({ request, env }) {
     const crOffset = -6 * 60;
     const crTime = new Date(now.getTime() + (crOffset - now.getTimezoneOffset()) * 60000);
 
-    // Ayer en Costa Rica
+    // El reporte cubre una ventana de PERIOD_DAYS días que termina ayer.
+    // Con 5, un día de mal rendimiento aislado deja de leerse como tendencia
+    // y el CPL por campaña se calcula sobre suficiente volumen para ser
+    // confiable (con 1 día, campañas chicas daban CPL que saltaba mucho).
+    const PERIOD_DAYS = 5;
+
+    const fmt = (d) =>
+      `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+
+    // Ayer en Costa Rica = último día de la ventana.
     const yesterday = new Date(crTime);
     yesterday.setDate(yesterday.getDate() - 1);
-    const year = yesterday.getFullYear();
-    const month = String(yesterday.getMonth() + 1).padStart(2, "0");
-    const day = String(yesterday.getDate()).padStart(2, "0");
-    const lastDay = `${year}-${month}-${day}`;
-    const firstDay = lastDay; // mismo día — solo ayer
+    const lastDay = fmt(yesterday);
+
+    // Primer día de la ventana: PERIOD_DAYS - 1 días antes, para que la
+    // ventana sea inclusiva en ambos extremos (5 días = ayer y los 4 previos).
+    const firstDate = new Date(yesterday);
+    firstDate.setDate(firstDate.getDate() - (PERIOD_DAYS - 1));
+    const firstDay = fmt(firstDate);
 
     const metaFields = "campaign_name,spend,impressions,clicks,reach,cpc,ctr,actions";
     const metaUrl = `https://graph.facebook.com/v19.0/${META_AD_ACCOUNT_ID}/insights?fields=${metaFields}&time_range={"since":"${firstDay}","until":"${lastDay}"}&level=campaign&access_token=${META_ACCESS_TOKEN}`;
@@ -50,11 +61,11 @@ export async function onRequestPost({ request, env }) {
       impressions: metaCampaigns.reduce((s, c) => s + c.impressions, 0),
     };
 
-    // 1b. Conversaciones de Sofía del mismo día (mismo rango CR → UTC que
-    // usa Meta arriba), para poder cruzar gasto/alcance publicitario contra
-    // conversaciones reales — no solo mirar cada dato por separado.
-    const dayStartUTC = new Date(`${lastDay}T00:00:00-06:00`);
-    const dayEndUTC = new Date(dayStartUTC.getTime() + 24 * 60 * 60 * 1000);
+    // 1b. Conversaciones de Sofía de la misma ventana (mismo rango CR → UTC
+    // que usa Meta arriba), para poder cruzar gasto/alcance publicitario
+    // contra conversaciones reales — no solo mirar cada dato por separado.
+    const dayStartUTC = new Date(`${firstDay}T00:00:00-06:00`);
+    const dayEndUTC = new Date(new Date(`${lastDay}T00:00:00-06:00`).getTime() + 24 * 60 * 60 * 1000);
 
     const sofiaRes = await fetch(
       `${SUPABASE_URL}/rest/v1/sofia_conversations?select=channel,escalated,sentiment,procedure_interest` +
@@ -96,14 +107,15 @@ export async function onRequestPost({ request, env }) {
     // 2. Construir contexto para Sofía
     const dataContext = {
       fecha: lastDay,
+      periodo: { desde: firstDay, hasta: lastDay, dias: PERIOD_DAYS },
       meta: { totals: metaTotals, campaigns: metaCampaigns },
       sofia: sofiaTotals,
     };
 
     const prompt = `Eres Sofía, la asistente de marketing del Centro Europeo de Cirugía (CEC) en Costa Rica.
-Analiza los datos de marketing Y de conversaciones del día, y genera un reporte ejecutivo breve, claro y accionable que cruce ambas fuentes — no las trates como dos temas separados.
+Analiza los datos de marketing Y de conversaciones del período, y genera un reporte ejecutivo breve, claro y accionable que cruce ambas fuentes — no las trates como dos temas separados.
 
-DATOS DE AYER (${lastDay}):
+DATOS DEL PERÍODO — ${PERIOD_DAYS} días, del ${firstDay} al ${lastDay} (todas las cifras son acumuladas de esos ${PERIOD_DAYS} días, no de un solo día):
 
 META ADS:
 - Gasto total: $${metaTotals.spend}
@@ -113,28 +125,30 @@ META ADS:
 Detalle por campaña:
 ${metaCampaigns.map(c => `  • ${c.name}: gasto $${c.spend.toFixed(2)}, leads: ${c.leads}${c.cpl ? ", CPL: $" + c.cpl : " (sin leads)"}`).join('\n')}
 
-CONVERSACIONES DE SOFÍA (mismo día):
+CONVERSACIONES DE SOFÍA (misma ventana de ${PERIOD_DAYS} días):
 - Total: ${sofiaTotals.total}
 - Por canal: WhatsApp: ${sofiaTotals.byChannel.whatsapp || 0}, Facebook/Instagram (redes sociales): ${sofiaTotals.byChannel.facebook || 0}
 - Escaladas a un asesor humano: ${sofiaTotals.escalated} (${sofiaTotals.escalationRate}%)
 - Sentimiento del paciente: positivo ${sofiaTotals.sentimentCounts.positivo || 0}, neutral ${sofiaTotals.sentimentCounts.neutral || 0}, negativo ${sofiaTotals.sentimentCounts.negativo || 0}
 - Temas más consultados: ${sofiaTotals.topTopics.length > 0 ? sofiaTotals.topTopics.map(t => `${t.topic} (${t.count})`).join(", ") : "sin datos suficientes"}
 
-Genera un análisis en español de los resultados del día analizado.
+Genera un análisis en español de los resultados del período analizado.
 Escribe como si le explicaras los resultados a alguien del equipo del CEC que no es experto en marketing digital — usa lenguaje simple, directo y humano. Evita tecnicismos. Cuando uses un número, explica qué significa.
 
 Por ejemplo:
 - En lugar de "CPL de $3.81" → "cada persona que dejó sus datos costó $3.81"
 - En lugar de "tasa de conversión del 8.8%" → "de cada 100 personas que vieron el anuncio, casi 9 hicieron clic"
 
-IMPORTANTE — cruza los dos datasets, no los reportes por separado: ¿el gasto y alcance en redes sociales (Meta/Facebook) se está traduciendo en conversaciones reales por WhatsApp/Facebook? ¿qué canal trae más conversaciones? ¿la gente que le escribe a Sofía muestra intención real de compra (tasa de escalación, sentimiento, temas de precio)? Si un día con más gasto en Meta no tuvo más conversaciones (o viceversa), decilo explícitamente — es justo el tipo de desconexión que el equipo necesita ver.
+IMPORTANTE — cruza los dos datasets, no los reportes por separado: ¿el gasto y alcance en redes sociales (Meta/Facebook) se está traduciendo en conversaciones reales por WhatsApp/Facebook? ¿qué canal trae más conversaciones? ¿la gente que le escribe a Sofía muestra intención real de compra (tasa de escalación, sentimiento, temas de precio)? Si el gasto en Meta no se tradujo en conversaciones (o viceversa), decilo explícitamente — es justo el tipo de desconexión que el equipo necesita ver.
+
+IMPORTANTE — es un corte de ${PERIOD_DAYS} días, no de un día: hablá de "estos ${PERIOD_DAYS} días" o "el período", nunca de "ayer" ni "el día de ayer". Como hay más volumen que en un corte diario, señalá lo que se sostiene en el tiempo y no un pico aislado: una campaña que rinde mal ${PERIOD_DAYS} días seguidos es una señal real, y ahí sí vale recomendar pausarla.
 
 IMPORTANTE: En las secciones de 'LO QUE ESTÁ FUNCIONANDO' y 'ÁREAS DE ATENCIÓN', SIEMPRE menciona el nombre exacto de cada campaña relevante. Nunca digas 'algunas campañas' o 'varias campañas' sin nombrarlas. Si hay campañas que gastaron sin generar leads, lista cada una por nombre.
 
 Con EXACTAMENTE este formato, sin agregar títulos extra, sin ##, sin --:
 
-**RESUMEN DEL DÍA**
-[2-3 oraciones simples explicando cómo le fue al CEC en publicidad. Como si le contaras a un colega en el pasillo.]
+**RESUMEN DEL PERÍODO**
+[2-3 oraciones simples explicando cómo le fue al CEC en publicidad en estos ${PERIOD_DAYS} días. Como si le contaras a un colega en el pasillo.]
 
 **LO QUE ESTÁ FUNCIONANDO**
 - [observación positiva en lenguaje simple, con el número y su significado]
@@ -145,12 +159,12 @@ Con EXACTAMENTE este formato, sin agregar títulos extra, sin ##, sin --:
 - [algo que merece revisión, explicado simplemente]
 - [otro punto si aplica]
 
-**QUÉ HACER HOY**
+**QUÉ HACER AHORA**
 1. [acción concreta, específica y simple — que cualquiera entienda qué hacer]
 2. [acción concreta 2]
 3. [acción concreta 3 si aplica]
 
-Máximo 250 palabras. Empieza directamente con **RESUMEN DEL DÍA**.`;
+Máximo 250 palabras. Empieza directamente con **RESUMEN DEL PERÍODO**.`;
 
     // 3. Llamar a Claude API
     const claudeRes = await fetch("https://api.anthropic.com/v1/messages", {
@@ -188,6 +202,7 @@ Máximo 250 palabras. Empieza directamente con **RESUMEN DEL DÍA**.`;
       },
       body: JSON.stringify({
         date: lastDay,
+        period_days: PERIOD_DAYS,
         analysis,
         data_snapshot: dataContext,
       }),
@@ -201,7 +216,7 @@ Máximo 250 palabras. Empieza directamente con **RESUMEN DEL DÍA**.`;
       });
     }
 
-    return new Response(JSON.stringify({ success: true, date: lastDay, analysis }), {
+    return new Response(JSON.stringify({ success: true, date: lastDay, periodo: { desde: firstDay, hasta: lastDay, dias: PERIOD_DAYS }, analysis }), {
       status: 200,
       headers: { "content-type": "application/json", "Access-Control-Allow-Origin": "*" },
     });

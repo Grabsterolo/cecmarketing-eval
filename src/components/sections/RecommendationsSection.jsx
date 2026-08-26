@@ -14,6 +14,34 @@ const formatDate = (dateStr) => {
   return d.toLocaleDateString("es-CR", { weekday: "long", year: "numeric", month: "long", day: "numeric" });
 };
 
+// Versión corta, para el extremo "desde" de un rango — el día de la semana y
+// el año se leen del extremo "hasta", repetirlos alarga sin aportar.
+const formatDateShort = (dateStr) => {
+  if (!dateStr) return "";
+  const d = new Date(dateStr + "T12:00:00");
+  return d.toLocaleDateString("es-CR", { month: "long", day: "numeric" });
+};
+
+// Los análisis viejos son diarios (period_days = 1) y los nuevos cubren una
+// ventana de varios días. Una fila sin period_days es histórica, de antes de
+// que existiera la columna, así que se asume diaria.
+const formatPeriod = (rec) => {
+  if (!rec) return "";
+  const days = rec.period_days || 1;
+  if (days <= 1) return formatDate(rec.date);
+
+  const end = new Date(rec.date + "T12:00:00");
+  const start = new Date(end);
+  start.setDate(start.getDate() - (days - 1));
+  const startStr = `${start.getFullYear()}-${String(start.getMonth() + 1).padStart(2, "0")}-${String(start.getDate()).padStart(2, "0")}`;
+  return `${formatDateShort(startStr)} — ${formatDate(rec.date)}`;
+};
+
+const periodLabel = (rec) => {
+  const days = rec?.period_days || 1;
+  return days <= 1 ? "Último día" : `Últimos ${days} días`;
+};
+
 const renderAnalysis = (text) => {
   return text.split('\n').map((line, i) => {
     if (line.startsWith('**') && line.endsWith('**')) {
@@ -155,7 +183,7 @@ export function RecommendationsSection() {
         subtitle="Reporte diario que cruza Meta Ads con las conversaciones reales de Sofía"
         action={
           <Button onClick={generateAnalysis} disabled={generating} style={{ flexShrink: 0, marginLeft: 16 }}>
-            {generating ? "Generando..." : "Generar análisis de hoy"}
+            {generating ? "Generando..." : "Generar corte de 5 días"}
           </Button>
         }
       />
@@ -177,10 +205,10 @@ export function RecommendationsSection() {
           <Card style={{ marginBottom: 24 }}>
             <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 16 }}>
               <p style={{ margin: 0, fontSize: 13, fontWeight: 600, color: COLORS.textMuted, fontFamily: "'Manrope', sans-serif", textTransform: "capitalize" }}>
-                {formatDate(today.date)}
+                {formatPeriod(today)}
               </p>
               <Badge variant="gold">
-                Hoy
+                {periodLabel(today)}
               </Badge>
             </div>
             <div>{renderAnalysis(today.analysis)}</div>
@@ -192,7 +220,7 @@ export function RecommendationsSection() {
       {!loading && !today && (
         <EmptyState
           title="Sin análisis todavía"
-          description='Haz clic en "Generar análisis de hoy" para que Sofía analice los datos actuales.'
+          description='Haz clic en "Generar corte de 5 días" para que Sofía analice el período más reciente.'
         />
       )}
 
@@ -206,7 +234,7 @@ export function RecommendationsSection() {
             {previous.map((rec) => (
               <Card key={rec.id || rec.date}>
                 <p style={{ margin: "0 0 8px", fontSize: 12, fontWeight: 600, color: COLORS.textMuted, fontFamily: "'Manrope', sans-serif", textTransform: "capitalize" }}>
-                  {formatDate(rec.date)}
+                  {formatPeriod(rec)}
                 </p>
                 <p style={{ margin: 0, fontSize: 12, color: COLORS.textMuted, fontFamily: "'Manrope', sans-serif", lineHeight: 1.5 }}>
                   {rec.analysis?.substring(0, 150)}{rec.analysis?.length > 150 ? "..." : ""}
