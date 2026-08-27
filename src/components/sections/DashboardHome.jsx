@@ -76,21 +76,18 @@ export function DashboardHome({ profile }) {
       .then((r) => r.json())
       .then((d) => (d.error ? Promise.reject(new Error(d.error)) : d));
 
-    const count = (build) =>
-      build(supabase.from("sofia_conversations").select("id", { count: "exact", head: true }).gte("created_at", since));
-
-    const sofiaPromise = Promise.all([
-      count((q) => q),
-      count((q) => q.eq("escalated", true)),
-      count((q) => q.eq("sentiment", "positivo")),
-      count((q) => q.eq("sentiment", "neutral")),
-      count((q) => q.eq("sentiment", "negativo")),
-      // Conversaciones por tema, una consulta exacta por familia — evita
-      // traerse miles de filas al navegador solo para contarlas.
-      ...CAMPAIGN_THEMES.map((t) =>
-        count((q) => q.in("procedure_code", t.codes))
-      ),
-    ]);
+    // Una sola llamada en vez de 11 conteos por separado. En Postgres cada
+    // conteo tarda 2-4 ms, pero eran 11 peticiones HTTP concurrentes: el
+    // navegador limita conexiones por host y PostgREST las encola, así que
+    // en producción una llegó a tardar 10 segundos y la pantalla se quedaba
+    // en "Cargando...". Ver la función sofia_home_stats en Supabase.
+    const sofiaPromise = supabase
+      .rpc("sofia_home_stats", { desde: since })
+      .then(({ data, error }) => {
+        if (error) return Promise.reject(new Error(error.message));
+        if (!data) return Promise.reject(new Error("Sin datos de conversaciones"));
+        return data;
+      });
 
     const [metaRes, sofiaRes] = await Promise.allSettled([metaPromise, sofiaPromise]);
 
@@ -98,19 +95,23 @@ export function DashboardHome({ profile }) {
     else setMetaError(metaRes.reason?.message || "No se pudo consultar Meta Ads");
 
     if (sofiaRes.status === "fulfilled") {
-      const r = sofiaRes.value;
-      // PostgREST puede responder count:null sin poblar `error`; tratarlo
-      // como 0 pintaría un dato falso, así que se detecta explícitamente.
-      const bad = r.find((x) => x.error || x.count == null);
-      if (bad) {
-        setSofiaError(bad.error?.message || "No se pudieron contar las conversaciones");
-      } else {
-        const [total, escaladas, positivo, neutral, negativo, ...temas] = r.map((x) => x.count);
-        setSofia({
-          total, escaladas, positivo, neutral, negativo,
-          porTema: Object.fromEntries(CAMPAIGN_THEMES.map((t, i) => [t.label, temas[i]])),
-        });
-      }
+      const d = sofiaRes.value;
+      setSofia({
+        total: d.total ?? 0,
+        escaladas: d.escaladas ?? 0,
+        positivo: d.positivo ?? 0,
+        neutral: d.neutral ?? 0,
+        negativo: d.negativo ?? 0,
+        // Las familias se suman acá y no en Postgres: la taxonomía ya vive
+        // en constants/procedures.js y duplicarla en la base obligaría a
+        // cambiarla en dos lugares.
+        porTema: Object.fromEntries(
+          CAMPAIGN_THEMES.map((t) => [
+            t.label,
+            t.codes.reduce((acc, code) => acc + (d.porCodigo?.[code] ?? 0), 0),
+          ])
+        ),
+      });
     } else {
       setSofiaError(sofiaRes.reason?.message || "No se pudieron contar las conversaciones");
     }
