@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from "react";
 import { Flame, ExternalLink, Copy, Check, ChevronLeft, ChevronRight, ChevronDown } from "lucide-react";
 import { COLORS } from "../../constants/colors.js";
-import { PROCEDURE_GROUPS, procedureOrFilter } from "../../constants/procedures.js";
+import { PROCEDURE_GROUPS, procedureOrFilter, formatProcedure } from "../../constants/procedures.js";
 import { Card } from "../ui/Card.jsx";
 import { SELECT_STYLE, FilterSelect } from "../ui/FilterSelect.jsx";
 import { Badge } from "../ui/Badge.jsx";
@@ -375,7 +375,7 @@ function LeadRow({ conv }) {
         <div style={{ flex: 1, minWidth: 0 }}>
           <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap", marginBottom: 4 }}>
             <p style={{ margin: 0, fontSize: 15, fontWeight: 700, color: COLORS.green, fontFamily: "'Manrope', sans-serif" }}>
-              {conv.procedure_interest || "Procedimiento no especificado"}
+              {formatProcedure(conv.procedure_interest) || "Procedimiento no especificado"}
             </p>
             {sentimentInfo && (
               <Badge variant={sentimentInfo.fg === COLORS.danger ? "danger" : "default"} style={{ background: sentimentInfo.bg, color: sentimentInfo.fg }}>

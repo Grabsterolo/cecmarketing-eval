@@ -25,9 +25,10 @@ export function SectionHeader({ icon, title, subtitle, action }) {
             )}
           </>
         ) : (
-          // Sin título, el icono acompaña al subtítulo en la misma línea en
-          // vez de quedar suelto sobre un hueco.
-          <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+          // Sin título, el icono acompaña al subtítulo. Se alinea arriba y no
+          // al centro: con un subtítulo que envuelve a dos o tres líneas (pasa
+          // en móvil), centrarlo dejaba el icono flotando a media altura.
+          <div style={{ display: "flex", alignItems: "flex-start", gap: 10 }}>
             {icon}
             {subtitle && (
               <p style={{ margin: 0, fontSize: 14, color: COLORS.textMuted, fontFamily: "'Manrope', sans-serif" }}>

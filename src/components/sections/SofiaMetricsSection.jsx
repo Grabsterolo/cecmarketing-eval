@@ -4,7 +4,7 @@ import {
 } from "recharts";
 import { MessageCircle } from "lucide-react";
 import { COLORS, SOURCE_COLORS } from "../../constants/colors.js";
-import { PROCEDURE_GROUPS, matchesProcedure } from "../../constants/procedures.js";
+import { PROCEDURE_GROUPS, matchesProcedure, formatProcedure } from "../../constants/procedures.js";
 import { Card } from "../ui/Card.jsx";
 import { ErrorBanner } from "../ui/ErrorBanner.jsx";
 import { SectionHeader } from "../ui/SectionHeader.jsx";
@@ -273,14 +273,21 @@ export function SofiaMetricsSection({ setActive }) {
   const [auditLoading, setAuditLoading] = useState(true);
 
   useEffect(() => {
+    // fetchAllInRange pagina de a 1000 filas, así que un rango grande tarda
+    // varios viajes. Sin esta guarda, cambiar de fecha dispara una segunda
+    // carga y la que termine de último gana — aunque sea la del rango
+    // anterior: se veían KPIs de un rango con las fechas de otro.
+    let cancelled = false;
     (async () => {
       setLoading(true);
       setError(null);
       const { data, error: fetchError } = await fetchAllInRange(from, to);
+      if (cancelled) return;
       if (fetchError) setError(fetchError.message);
       else setConversations(data || []);
       setLoading(false);
     })();
+    return () => { cancelled = true; };
   }, [from, to]);
 
   useEffect(() => {
@@ -452,7 +459,7 @@ export function SofiaMetricsSection({ setActive }) {
                       display: "flex", justifyContent: "space-between", alignItems: "baseline",
                       gap: 12, marginBottom: 4, fontSize: 13, fontFamily: "'Manrope', sans-serif",
                     }}>
-                      <span style={{ color: COLORS.text, fontWeight: 600 }}>{t.topic}</span>
+                      <span style={{ color: COLORS.text, fontWeight: 600 }}>{formatProcedure(t.topic)}</span>
                       <span style={{ color: COLORS.textMuted, whiteSpace: "nowrap" }}>
                         {t.count} · {t.pctEscalated}% a un asesor
                       </span>

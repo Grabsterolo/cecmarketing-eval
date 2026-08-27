@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { PhoneCall, ExternalLink, ChevronDown, ChevronLeft, ChevronRight, Smile, Minus, Frown } from "lucide-react";
 import { COLORS } from "../../constants/colors.js";
-import { PROCEDURE_GROUPS, matchesProcedure } from "../../constants/procedures.js";
+import { PROCEDURE_GROUPS, matchesProcedure, formatProcedure } from "../../constants/procedures.js";
 import { Card } from "../ui/Card.jsx";
 import { SELECT_STYLE, FilterSelect } from "../ui/FilterSelect.jsx";
 import { Badge } from "../ui/Badge.jsx";
@@ -340,7 +340,7 @@ function FollowupRow({ group, onUpdateStatus, error }) {
   const [notaOpen, setNotaOpen] = useState(false);
   const conv = group.latest;
   const sentimentInfo = SENTIMENT_ICON[normalize(conv.sentiment)];
-  const title = conv.procedure_interest || conv.escalation_reason || "Sin detalle";
+  const title = formatProcedure(conv.procedure_interest) || conv.escalation_reason || "Sin detalle";
 
   return (
     <Card style={{ marginBottom: 12, padding: 16 }}>
@@ -472,14 +472,20 @@ export function SeguimientoSection({ profile }) {
   useEffect(() => { loadKpis(from, to); }, [loadKpis, from, to]);
 
   useEffect(() => {
+    // Misma guarda que en SofiaMetricsSection: fetchAllInRange pagina de a
+    // 1000 filas, así que cambiar de fecha durante una carga dejaba que la
+    // respuesta del rango viejo pisara a la del nuevo.
+    let cancelled = false;
     (async () => {
       setLoading(true);
       setError(null);
       const { data, error: fetchError } = await fetchAllInRange(from, to);
+      if (cancelled) return;
       if (fetchError) setError(fetchError.message);
       else setRawRows(data || []);
       setLoading(false);
     })();
+    return () => { cancelled = true; };
   }, [from, to]);
 
   // Cambiar cualquier filtro vuelve a la página 1 — si no, se puede quedar

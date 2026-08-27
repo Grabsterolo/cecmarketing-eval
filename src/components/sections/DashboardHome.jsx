@@ -219,10 +219,12 @@ export function DashboardHome({ profile }) {
               border: false,
             },
           ].map((kpi, i) => (
+            // El padding se calcula como un solo valor en vez de mezclar el
+            // atajo `padding` con `paddingLeft`/`paddingRight`: al mezclarlos,
+            // React avisa que no puede resetear el longhand cuando pasa a
+            // undefined en un rerender, y el espaciado puede quedar pegado.
             <div key={i} style={{
-              padding: isMobile ? 0 : "0 24px",
-              paddingLeft: i === 0 ? 0 : undefined,
-              paddingRight: i === 1 ? 0 : undefined,
+              padding: isMobile ? 0 : `0 ${i === 1 ? 0 : 24}px 0 ${i === 0 ? 0 : 24}px`,
               borderRight: kpi.border ? "1px solid rgba(255,255,255,0.12)" : "none",
             }}>
               <p style={{ margin: "0 0 6px", fontSize: 11, letterSpacing: "0.08em", textTransform: "uppercase", fontWeight: 600, color: "rgba(255,255,255,0.6)", fontFamily: "'Manrope', sans-serif" }}>

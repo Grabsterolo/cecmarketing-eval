@@ -47,6 +47,17 @@ function groupFor(value) {
   return PROCEDURE_GROUPS.find((g) => g.value === value);
 }
 
+// Claude escribe procedure_interest en texto libre y sin criterio fijo de
+// mayúsculas, así que en las listas convivían "Aumento mamario" y
+// "abdominoplastia con lipo 360". Solo se levanta la primera letra: el resto
+// se deja intacto para no romper nombres de marca ("MIA Femtech",
+// "QuantumRF", "Ultherapy PRIME"), que un capitalize completo destruiría.
+export function formatProcedure(procedureInterest) {
+  const s = (procedureInterest || "").trim();
+  if (!s) return "";
+  return s[0].toLocaleUpperCase("es") + s.slice(1);
+}
+
 // Predicado en JS, para las secciones que ya tienen las filas en memoria y
 // filtran del lado del cliente (Métricas Sofía).
 export function matchesProcedure(procedureInterest, groupValue) {
