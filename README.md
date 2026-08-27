@@ -15,19 +15,36 @@ Portal interno de mercadeo del Centro Europeo de Cirugía (CEC). Mismo sistema d
 ```
 src/
   components/
-    auth/LoginScreen.jsx       — pantalla de login, mismo diseño que ceccolaboradores
+    auth/LoginScreen.jsx        — pantalla de login, mismo diseño que ceccolaboradores
     layout/Sidebar.jsx          — navegación lateral (desktop + mobile drawer)
-    sections/
-      DashboardHome.jsx         — resumen general
-      MetricsSection.jsx        — Meta Ads + Google Ads/Analytics (placeholder, Fase 3)
-      SofiaConversationsSection.jsx — conversaciones de WhatsApp, conectado a Supabase
-      RecommendationsSection.jsx    — recomendaciones de IA (placeholder, Fase 4)
-      ConfigureSofiaSection.jsx     — editor del prompt y base de conocimiento de Sofía
-    ui/                         — Card, Logo, PasswordInput, PendingIntegrationCard
-  constants/colors.js           — paleta y animaciones, idénticas a ceccolaboradores
-  constants/nav.js               — items de navegación y estado de fuentes de datos
-  lib/supabase.js                — cliente de Supabase
-supabase/schema.sql              — SQL para crear las tablas necesarias
+    Dashboard.jsx               — layout, <h1> con el nombre de la sección, y el router
+    sections/                     (el orden es el del menú)
+      DashboardHome.jsx         — Inicio: KPIs del mes + cruce campañas/conversaciones
+      MetricsSection.jsx        — Métricas Meta (datos reales de Meta Ads)
+      SofiaMetricsSection.jsx   — Métricas Sofía: volumen, escalación, temas, calidad
+      RecommendationsSection.jsx— análisis por período que cruza Meta con Sofía
+      LeadsCalientesSection.jsx — Leads Potenciales, ordenados por score
+      SeguimientoSection.jsx    — cola de conversaciones abiertas sin venta
+      PacientesSection.jsx      — base de pacientes: teléfono, interés, actividad
+      SofiaAuditSection.jsx     — autoauditorías de Sofía
+      ConfigureSofiaSection.jsx — editor del prompt y base de conocimiento
+      TestSofiaSection.jsx      — Probar a Sofía
+      BirthdaySection.jsx       — Cumpleaños
+    ui/                         — Card, Badge, Button, EmptyState, ErrorBanner,
+                                  FilterSelect, Logo, MetricKpi, PasswordInput,
+                                  PendingIntegrationCard, SectionHeader
+  constants/colors.js           — paleta, escala tipográfica y animaciones
+  constants/nav.js              — items de navegación y estado de fuentes de datos
+  constants/procedures.js       — taxonomía de procedimientos (nombres y familias)
+  lib/supabase.js               — cliente de Supabase
+functions/api/                  — Cloudflare Pages Functions (corren en el server,
+                                  NO en `vite dev`; ver "Deploy" más abajo)
+  meta-metrics.js               — proxy a Meta Ads (mes a la fecha, por campaña)
+  daily-analysis.js             — genera el reporte de período con Claude
+  conversion-stats.js           — proxy al Worker /stats/conversion (sin consumidor)
+  chat.js, audit-sofia.js, cleanup-scan.js, reindex.js, send-birthday.js
+supabase/schema.sql             — SQL base (NO incluye las migraciones recientes,
+                                  ver "Migraciones que solo viven en Supabase")
 ```
 
 ## Variables de entorno
@@ -51,17 +68,166 @@ Mismo flujo que tus otros proyectos: conectar este repo a Cloudflare Pages, conf
 
 ## Roadmap (orden de construcción)
 
-**Fase 1 — Frontend y editor de Sofía (este entregable)**
-Login, dashboard, sidebar, y la sección "Configurar a Sofía" ya funcionando contra Supabase. No depende de acceso externo.
+> **Las cuatro fases están terminadas.** Se dejan como registro de cómo se
+> construyó. El estado real y actualizado está en la sección siguiente.
 
-**Fase 2 — Conversaciones de Sofía**
-La sección ya está construida y lista para mostrar datos reales en cuanto el backend del webhook de WhatsApp empiece a escribir en la tabla `sofia_conversations`.
+**Fase 1 — Frontend y editor de Sofía** *(hecho)*
+Login, dashboard, sidebar y "Configurar a Sofía" contra Supabase.
+
+**Fase 2 — Conversaciones de Sofía** *(hecho)*
+`sofia_conversations` recibe datos del Worker desde el 2026-07-26. Hoy son
+~9.200 conversaciones reales, repartidas en Métricas Sofía, Leads
+Potenciales, Seguimiento y Pacientes.
 
 **Fase 3 — Conectar Meta y Google** *(hecho — Meta en vivo; Google se retiró)*
 `MetricsSection.jsx` ("Métricas Meta" en el nav) corre con datos reales de Meta Ads, sin mock data (CPL, gráfico gasto vs leads, insight automático). Google Ads/Analytics se integró primero (commit `8da8f0b`) pero se quitó del dashboard por decisión de producto — "resultó poco práctico" (commit `2039363`), no por falta de acceso. `DATA_SOURCES` en `nav.js` solo lista `meta` y `sofia`, ambos `connected: true`.
 
 **Fase 4 — Motor de recomendaciones** *(hecho)*
 `RecommendationsSection.jsx` ya no es placeholder: muestra el análisis diario real de la tabla `sofia_recommendations`, generado por la función `daily-analysis`, que cruza el gasto/leads de Meta con los temas de conversación de Sofía (commit `2c6f093`, "cruzar Meta Ads con conversaciones de Sofía en el reporte diario").
+
+## Estado al 2026-08-27 — leer esto primero
+
+Foto completa del sistema. Si abrís una sesión nueva, esto es lo que hay que
+saber antes de tocar nada.
+
+### Las tres piezas y cómo se despliega cada una
+
+Esto causó dos errores reales el 2026-08-27, así que va primero:
+
+| Pieza | Repo | Despliegue |
+|---|---|---|
+| Dashboard | `cecmarketing` | **Automático.** Cloudflare Pages publica en cada push a `main`. |
+| Worker de Sofía | `cec-sofia-whatsapp` | **MANUAL.** `npx wrangler deploy` desde ese repo. **Un push NO lo despliega.** |
+| Base de datos | Supabase (proyecto `wuradlaomyoxkiagqvyi`) | Las migraciones quedan vivas al aplicarse. |
+
+**Nunca asumir que un cambio del Worker está en producción por haberlo
+pusheado.** Para verificar qué versión corre, llamar a un endpoint suyo y ver
+si trae los campos nuevos. El 2026-08-27 hubo dos commits que llevaban horas
+subidos sin estar vivos, y se reportaron como desplegados.
+
+Se puede automatizar conectando el repo del Worker en Cloudflare →
+Settings → Builds. No se hizo: deja pasar a producción sin revisión, y ahí
+corre la conversación real con pacientes.
+
+### Migraciones que solo viven en Supabase, no en git
+
+`supabase/schema.sql` **está desactualizado**. Estas migraciones se aplicaron
+directo y no hay rastro de ellas en el repo — si alguien recrea la base desde
+el schema, el dashboard se rompe:
+
+| Migración | Qué hace |
+|---|---|
+| `sofia_recommendations_period_days` | Columna `period_days`: distingue reportes diarios (histórico) de los cortes de 5 días. |
+| `sofia_procedure_code_taxonomy` | Función `sofia_procedure_code()` + columna generada `procedure_code`. **Es el corazón de la categorización.** |
+| `followup_queue_expose_procedure_code_v2` | Recrea la vista `sofia_followup_queue` para exponer `procedure_code`. |
+| `sofia_home_stats_rpc` | Función `sofia_home_stats()`: todas las cifras de Inicio en una llamada. |
+| `sofia_set_phones_rpc` | Función `sofia_set_phones()`: escribe teléfonos. SECURITY DEFINER, solo service_role. |
+| `sofia_conversations_updated_at` | Columna `updated_at` + trigger. |
+| `sofia_pacientes_v2` | Vista `sofia_pacientes`, base de la sección Pacientes. |
+
+**Pendiente:** volcar todo esto a `supabase/migrations/` para que quede
+versionado.
+
+### Cómo se clasifican las conversaciones
+
+`procedure_interest` lo escribe Claude en **texto libre**: 2.470 valores
+distintos sobre ~9.000 conversaciones, 1.842 de ellos apareciendo una sola
+vez. No sirve para agrupar ni filtrar.
+
+Por eso existe `procedure_code`, una **columna generada** que normaliza ese
+texto a 42 códigos con la función `sofia_procedure_code()`. Cobertura
+medida: **96,4%**. Al ser generada, el histórico se clasificó solo y las filas
+nuevas se calculan sin que el Worker haga nada.
+
+Los nombres legibles y las familias viven en `src/constants/procedures.js`.
+**Si se ajustan las reglas hay que cambiar la función en Supabase Y recrear la
+columna** — cambiar la función no recalcula las filas existentes.
+
+Dos cosas deliberadas de esa taxonomía:
+- **MIA, Preservé, aumento tradicional y mastopexia van separados.** No es
+  cosmético: mastopexia escala al 51% y Preservé al 28%.
+- **La regla de MIA usa `\ymia\y`** (límite de palabra). Sin eso captura
+  bichectoMIA, mastectoMIA y lipectoMIA.
+
+### Lo que NO se puede medir hoy, y por qué
+
+- **Conversión a paciente.** `derived_to_appointment` está en 0 en todas las
+  filas: nadie la escribe. `sofia_followup_status` tiene 4 filas y **cero
+  "agendó"** — el módulo de Seguimiento existe pero el equipo no lo usa
+  (2.437 pendientes, 0 contactados). Es problema de proceso, no de software.
+- **Atribución publicitaria.** Sofía no recibe de qué anuncio viene cada
+  paciente. Se revisó el objeto Prospect de Zenvia: su campo `leads` trae
+  `source`/`utmSource`, pero con valor `"WHATSAPP"` — sin campaña ni anuncio.
+  Meta manda ese dato en sus anuncios click-to-WhatsApp, pero no llega a
+  través de Zenvia. **Inicio cruza campañas y conversaciones por TEMA, y lo
+  dice en pantalla: no es atribución.**
+- **Tráfico de TikTok.** 264 conversaciones vienen de anuncios de TikTok
+  (el primer mensaje los identifica), y el dashboard no registra ninguna
+  inversión en ese canal. **Punto ciego que el cliente no sabe que tiene.**
+
+### Teléfonos de pacientes
+
+`sofia_conversations` guardaba solo `phone_hash` (SHA-256, irreversible) por
+privacidad. **El 2026-08-27 se revirtió esa decisión a pedido del cliente**
+para poder tener la sección Pacientes:
+
+- El Worker ahora guarda `phone_number` en claro en cada conversación nueva
+  (ya tenía el número; lo usaba para el hash y lo descartaba).
+- `POST /sync/phones` rellena el histórico desde Zenvia. Cobertura lograda:
+  **3.374 de 9.257 personas (36%)**, limitada porque las conversaciones
+  anteriores al 5 de agosto no tienen `prospect_id`, y porque
+  `GET /prospects` de Zenvia **topa en 5.000 sin paginación**.
+- Protección: RLS con lectura solo para autenticados; la escritura de
+  teléfonos está restringida al Worker vía SECURITY DEFINER.
+
+**Sin resolver:** el uso legal. Subir a Meta teléfonos de personas que
+consultaron por cirugía estética toca la Ley 8968 y las restricciones de Meta
+sobre datos de salud. La parte técnica está lista; la definición no.
+
+### Un paciente que vuelve NO genera una fila nueva
+
+`upsertConversation` busca por `phone_hash` **sin filtro de fecha**, toma la
+fila más antigua y la actualiza. Consecuencias:
+
+- `created_at` es el **primer contacto** y nunca cambia.
+- `updated_at` (trigger, agregado el 2026-08-27) es la última actividad.
+- `message_count` acumula para siempre; `escalated` es "sticky".
+- Solo 14 personas de 9.257 tienen más de una fila, y son residuo de un bug
+  viejo de entregas duplicadas.
+
+**Ojo con las métricas:** la gráfica de volumen diario agrupa por
+`created_at`, así que mide **conversaciones nuevas por día**, no actividad.
+Hoy da casi igual; si aparecen pacientes recurrentes, dejará de darlo.
+
+### Errores encontrados y corregidos el 2026-08-27 — no reintroducir
+
+- **Un fallo nunca puede pintar 0.** Inicio mostraba `$0.00` cuando Meta
+  fallaba (`.catch(() => {})` + `|| 0`), que se lee como "no se invirtió
+  nada". Ahora muestra `—` y lo explica. Mismo criterio en toda pantalla.
+- **`MetricKpi` reventaba** al pasar de `"..."` a un valor con decimales:
+  `useState` no reaplica su inicializador, `display` seguía en `null` y
+  `null.toFixed()` desmontaba todo React → pantalla en blanco.
+- **Condición de carrera** en Métricas Sofía y Seguimiento: el efecto no
+  cancelaba la carga anterior y una respuesta vieja pisaba a la nueva.
+- **11 peticiones concurrentes** en Inicio hacían que una tardara 10 segundos.
+  Las consultas tardan 2-4 ms en Postgres: el cuello era HTTP, no la base.
+  Resuelto con `sofia_home_stats`.
+- **`CREATE OR REPLACE VIEW` no permite renombrar ni intercalar columnas** —
+  solo agregar al final. Para cambiar nombres hay que `DROP` y recrear.
+- **Agregar una columna a una tabla NO la agrega a sus vistas.** Al crear
+  `procedure_code` la vista `sofia_followup_queue` no lo heredó y Seguimiento
+  quedó roto.
+
+### Verificación: compilar no es ejecutar
+
+El 2026-08-27 se subió una pantalla que compilaba y cuyos números cuadraban
+contra SQL, pero que **reventaba al renderizar**. Antes de subir una sección
+nueva hay que verla corriendo.
+
+`vite dev` **no ejecuta las Cloudflare Pages Functions**, así que localmente
+`/api/*` devuelve el `index.html` y Meta siempre falla. Eso es normal en
+local, no un bug. Para probar el build de producción hay una config
+`cecmarketing-preview` en `.claude/launch.json`.
 
 ## Notas para sesiones futuras
 
@@ -103,7 +269,46 @@ posible doble mensaje real al paciente). Se arregló ahí, documentado en
 detalle en la sección **5p** del README de ese repo — leer eso antes de
 tocar `processInboundMessage()` o la deduplicación de interacciones.
 
-## Pendientes generales del proyecto CEC (no específicos de este dashboard)
+## Pendientes al 2026-08-27
 
-- Workspace dedicado en la consola de Anthropic para separar el costo de Sofía del resto del uso de Claude.
-- Conectar `conversion-stats.js` a alguna pantalla del dashboard, o quitarlo si no se va a usar — hoy es un endpoint construido sin consumidor.
+### Decisiones que dependen del cliente
+
+- **Uso legal de los teléfonos.** Ya hay 3.374 números de pacientes de cirugía
+  estética en la base. Para el dashboard interno es una cosa; subirlos a Meta
+  como audiencias de exclusión es otra (Ley 8968 + restricciones de Meta sobre
+  datos de salud). La parte técnica está lista, la definición no.
+- **El guion de precio en cirugía.** 766 conversaciones terminan en la
+  respuesta de "no puedo dar precio", y ahí el paciente abandona en el 62,7%
+  de los casos, contra 11,9% del resto de consultas quirúrgicas. Cerrar con
+  una pregunta NO ayuda (61,8% vs 65,3%): Sofía ya lo hace en 3 de cada 4.
+  Qué ofrecer en ese mensaje es decisión comercial del CEC.
+- **Que alguien use Seguimiento.** 2.437 pendientes, 0 contactados, 0
+  agendados. Sin esto no hay forma de medir conversión real.
+- **Avisarle al cliente lo de TikTok** — 264 conversaciones sin inversión
+  registrada en ese canal.
+- **Frecuencia del reporte en Cloudflare.** El código genera cortes de 5 días,
+  pero si el disparador sigue siendo diario produce una ventana móvil de 5
+  días cada día, no un corte cada 5.
+- **Dónde vive la conversión de Zenvia.** `conversion-stats.js` sigue sin
+  consumidor: se quitó de Métricas Sofía por pedido de que esa sección fuera
+  solo de Sofía.
+
+### Técnicos
+
+- **Versionar las migraciones** en `supabase/migrations/` — hoy solo viven en
+  Supabase (ver la tabla en "Estado al 2026-08-27").
+- **RLS desactivado en `sofia_inactivity_cleanup`.** Cualquiera con la clave
+  pública puede leer y escribir esa tabla. No la usa el dashboard, pero
+  conviene cerrarla.
+- **El tope de 5.000 de Zenvia.** Afecta dos cosas: la conversión sale
+  subcontada (`/stats/conversion` ya devuelve `truncated: true`, y se
+  confirmó que el tope se está alcanzando), y la cobertura de teléfonos del
+  histórico quedó en 36%. `GET /prospects` no pagina; habría que trocear la
+  consulta por fecha o por motivo de archivo, si la API lo permite.
+- **3,6% de conversaciones sin clasificar** (320) en la cola de la taxonomía.
+- **Una conversación = un procedimiento.** Se pierden los casos que comparan
+  dos opciones (7 con MIA vs Preservé) o combinan procedimientos (6 con
+  lifting + blefaroplastia). Se resolvería con categoría primaria y
+  secundaria.
+- **Workspace dedicado en la consola de Anthropic** para separar el costo de
+  Sofía del resto del uso de Claude.
