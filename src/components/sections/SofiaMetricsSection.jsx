@@ -12,6 +12,21 @@ import { MetricKpi, tableStyles } from "../ui/MetricKpi.jsx";
 import { useIsMobile } from "../../hooks/useIsMobile.js";
 import { supabase } from "../../lib/supabase.js";
 
+// Motivos de archivo que devuelve Zenvia en el breakdown de conversión.
+// "converted" y "campaignConversion" son los que el Worker cuenta como
+// conversión; "sinArchivar" lo inventa el Worker para los prospectos que
+// Zenvia todavía no archivó (siguen abiertos, no son un "no"). Cualquier
+// motivo que no esté acá se muestra tal cual lo manda Zenvia.
+const ARCHIVING_REASON_LABEL = {
+  converted: "Convertido",
+  campaignConversion: "Convertido por campaña",
+  sinArchivar: "Todavía abierto",
+  noAnswer: "Sin respuesta",
+  notInterested: "No interesado",
+  duplicated: "Duplicado",
+  invalidContact: "Contacto inválido",
+};
+
 // Los datos reales de sofia_conversations arrancan acá — igual que en
 // LeadsCalientesSection, un rango anterior a esta fecha no tiene nada que
 // mostrar y hay que avisarlo en vez de dejar una gráfica vacía sin explicar.
@@ -265,6 +280,13 @@ export function SofiaMetricsSection({ setActive }) {
 
   const [allConversations, setConversations] = useState([]);
   const [procedureFilter, setProcedureFilter] = useState("todos");
+
+  // La conversión no sale de Supabase: la calcula el Worker cruzando
+  // prospect_id contra el archivingReason de Zenvia. Por eso vive en su
+  // propio estado y no puede filtrarse por procedimiento — ver la nota en
+  // la tarjeta.
+  const [conversion, setConversion] = useState(null);
+  const [conversionState, setConversionState] = useState("loading");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
@@ -281,6 +303,31 @@ export function SofiaMetricsSection({ setActive }) {
       setLoading(false);
     })();
   }, [from, to]);
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      setConversionState("loading");
+      try {
+        const res = await fetch(`/api/conversion-stats?since=${from}T00:00:00-06:00`);
+        const data = await res.json().catch(() => ({}));
+        if (cancelled) return;
+        if (!res.ok) {
+          // 503 = falta configurar el Worker en Cloudflare. Se distingue del
+          // resto para poder decir qué hacer, en vez de mostrar un 0 que se
+          // leería como "nadie convirtió".
+          setConversionState(res.status === 503 ? "unconfigured" : "error");
+          setConversion(data);
+        } else {
+          setConversion(data);
+          setConversionState("ok");
+        }
+      } catch {
+        if (!cancelled) setConversionState("error");
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [from]);
 
   useEffect(() => {
     (async () => {
@@ -400,6 +447,79 @@ export function SofiaMetricsSection({ setActive }) {
               />
             </Card>
           </div>
+
+          <Card>
+            <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", gap: 12, flexWrap: "wrap", marginBottom: 12 }}>
+              <h3 style={{ margin: 0, fontSize: 18, fontFamily: "'Cormorant Garamond', serif", fontWeight: 600, color: COLORS.green }}>
+                Conversión a paciente
+              </h3>
+              {conversionState === "ok" && conversion?.conversationsWithProspectId > 0 && (
+                <span style={{ fontSize: 12, color: COLORS.textMuted, fontFamily: "'Manrope', sans-serif" }}>
+                  {conversion.converted} de {conversion.conversationsWithProspectId} prospectos
+                </span>
+              )}
+            </div>
+
+            {conversionState === "loading" && (
+              <p style={{ margin: 0, fontSize: 13, color: COLORS.textMuted, fontFamily: "'Manrope', sans-serif" }}>
+                Consultando a Zenvia...
+              </p>
+            )}
+
+            {conversionState === "unconfigured" && (
+              <p style={{ margin: 0, fontSize: 13, color: COLORS.textMuted, fontFamily: "'Manrope', sans-serif", lineHeight: 1.6 }}>
+                Falta configurar <code>SOFIA_WORKER_URL</code> y <code>SOFIA_WORKER_STATS_SECRET</code> en
+                Cloudflare Pages. Sin eso no se puede calcular la conversión — no es que sea cero.
+              </p>
+            )}
+
+            {conversionState === "error" && (
+              <p style={{ margin: 0, fontSize: 13, color: COLORS.warning, fontFamily: "'Manrope', sans-serif", lineHeight: 1.6 }}>
+                No se pudo consultar la conversión{conversion?.error ? `: ${conversion.error}` : "."} El dato
+                vive en Zenvia, así que este error no afecta al resto de las métricas.
+              </p>
+            )}
+
+            {conversionState === "ok" && (
+              conversion?.conversationsWithProspectId === 0 ? (
+                <p style={{ margin: 0, fontSize: 13, color: COLORS.textMuted, fontFamily: "'Manrope', sans-serif", lineHeight: 1.6 }}>
+                  Ninguna conversación de este rango tiene identificador de Zenvia todavía, así que no hay
+                  conversión que medir.
+                </p>
+              ) : (
+                <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+                  <MetricKpi
+                    label="Conversión"
+                    value={`${Math.round((conversion.conversionRate || 0) * 1000) / 10}%`}
+                    sub="Prospectos que Zenvia marcó como convertidos"
+                  />
+                  <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
+                    {Object.entries(conversion.breakdown || {})
+                      .sort((a, b) => b[1] - a[1])
+                      .map(([reason, n]) => (
+                        <span key={reason} style={{
+                          fontSize: 12, fontFamily: "'Manrope', sans-serif",
+                          background: COLORS.panelAlt, color: COLORS.text,
+                          borderRadius: 100, padding: "4px 10px",
+                        }}>
+                          {ARCHIVING_REASON_LABEL[reason] || reason}: <strong>{n}</strong>
+                        </span>
+                      ))}
+                  </div>
+                </div>
+              )
+            )}
+
+            <p style={{
+              margin: "14px 0 0", fontSize: 11.5, lineHeight: 1.5,
+              color: COLORS.textMuted, fontFamily: "'Manrope', sans-serif",
+            }}>
+              Único dato de esta pantalla que no sale de Supabase: lo calcula el Worker cruzando cada
+              conversación contra el estado del prospecto en Zenvia. Solo cubre conversaciones con
+              identificador de Zenvia — el histórico anterior no es recuperable — y por eso
+              <strong> no responde al filtro de procedimiento</strong> ni al día final del rango.
+            </p>
+          </Card>
 
           <Card>
             <h3 style={{ margin: "0 0 16px", fontSize: 18, fontFamily: "'Cormorant Garamond', serif", fontWeight: 600, color: COLORS.green }}>

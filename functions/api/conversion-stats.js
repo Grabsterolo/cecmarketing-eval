@@ -3,7 +3,7 @@
 // ningún secret del lado del cliente — el secret que habla con el Worker
 // (STATS_TRIGGER_SECRET) se queda solo en Cloudflare Pages, igual que
 // SOFIA_WORKER_SEND_SECRET en send-birthday.js.
-export async function onRequestGet({ env }) {
+export async function onRequestGet({ request, env }) {
   const { SOFIA_WORKER_URL, SOFIA_WORKER_STATS_SECRET } = env;
 
   if (!SOFIA_WORKER_URL || !SOFIA_WORKER_STATS_SECRET) {
@@ -13,8 +13,15 @@ export async function onRequestGet({ env }) {
     });
   }
 
+  // El Worker acepta ?since=<ISO> para acotar el cálculo a las conversaciones
+  // creadas desde esa fecha. Se pasa tal cual para que el dashboard pueda
+  // pedir la conversión del mismo rango que muestra el resto de la sección.
+  const since = new URL(request.url).searchParams.get("since");
+  const target = new URL(`${SOFIA_WORKER_URL}/stats/conversion`);
+  if (since) target.searchParams.set("since", since);
+
   try {
-    const res = await fetch(`${SOFIA_WORKER_URL}/stats/conversion`, {
+    const res = await fetch(target.toString(), {
       headers: { "x-stats-secret": SOFIA_WORKER_STATS_SECRET },
     });
     const data = await res.json().catch(() => ({}));
