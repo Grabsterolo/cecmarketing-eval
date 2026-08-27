@@ -46,9 +46,18 @@ function useCountUp(value, durationMs = 800) {
 
   if (!parsed) return value;
 
+  // `display` arranca en null cuando el primer render trae un valor no
+  // numérico ("...", "—"), y useState no vuelve a aplicar su inicializador:
+  // sigue en null hasta que el efecto de arriba corra. Pero el render pasa
+  // ANTES del efecto, así que en el primer render con un valor numérico
+  // real había que leer null — y `null.toFixed()` tira una excepción que
+  // desmonta todo el árbol y deja la pantalla en blanco. Con valores
+  // enteros no se notaba, porque Math.round(null) da 0.
+  const current = display == null ? parsed.number : display;
+
   const formatted = parsed.decimals
-    ? display.toFixed(parsed.decimals)
-    : Math.round(display).toString();
+    ? current.toFixed(parsed.decimals)
+    : Math.round(current).toString();
   const withCommas = parsed.hasCommas
     ? formatted.replace(/\B(?=(\d{3})+(?!\d))/g, ",")
     : formatted;
