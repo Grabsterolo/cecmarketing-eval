@@ -13,6 +13,7 @@ import { SofiaAuditSection } from "./sections/SofiaAuditSection.jsx";
 import { ConfigureSofiaSection } from "./sections/ConfigureSofiaSection.jsx";
 import { TestSofiaSection } from "./sections/TestSofiaSection.jsx";
 import { BirthdaySection } from "./sections/BirthdaySection.jsx";
+import { PacientesSection } from "./sections/PacientesSection.jsx";
 import { SeguimientoSection } from "./sections/SeguimientoSection.jsx";
 
 const SECTION_TITLES = {
@@ -26,6 +27,7 @@ const SECTION_TITLES = {
   "probar-sofia": "Probar a Sofía",
   cumpleanos: "Cumpleaños",
   seguimiento: "Seguimiento",
+  pacientes: "Pacientes",
 };
 
 const DAYS = ["DOMINGO", "LUNES", "MARTES", "MIÉRCOLES", "JUEVES", "VIERNES", "SÁBADO"];
@@ -83,6 +85,7 @@ export function Dashboard({ onLogout, profile }) {
       case "probar-sofia": return <TestSofiaSection />;
       case "cumpleanos": return <BirthdaySection />;
       case "seguimiento": return <SeguimientoSection profile={profile} />;
+      case "pacientes": return <PacientesSection />;
       default: return null;
     }
   }

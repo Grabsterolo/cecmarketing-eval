@@ -1,5 +1,5 @@
 import {
-  Home, LayoutDashboard, Sparkles, Settings2, FlaskConical, ShieldCheck, Cake, Flame, MessageCircle, PhoneCall,
+  Home, LayoutDashboard, Sparkles, Settings2, FlaskConical, ShieldCheck, Cake, Flame, MessageCircle, PhoneCall, Users,
 } from "lucide-react";
 
 export const ROTATING_WORDS = ["campañas", "conversaciones", "métricas", "recomendaciones", "tu marca"];
@@ -13,6 +13,7 @@ export const NAV_ITEMS = [
   { key: "recomendaciones", label: "Recomendaciones", icon: Sparkles },
   { key: "leads-calientes", label: "Leads Potenciales", icon: Flame },
   { key: "seguimiento", label: "Seguimiento", icon: PhoneCall },
+  { key: "pacientes", label: "Pacientes", icon: Users },
   { key: "auditoria-sofia", label: "Auditoría de Sofía", icon: ShieldCheck },
   { key: "configurar-sofia", label: "Configurar a Sofía", icon: Settings2 },
   { key: "probar-sofia", label: "Probar a Sofía", icon: FlaskConical },
