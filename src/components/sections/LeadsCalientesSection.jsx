@@ -538,7 +538,6 @@ export function LeadsCalientesSection() {
     <div>
       <SectionHeader
         icon={<Flame size={20} color={COLORS.gold} />}
-        title="Leads Potenciales"
         subtitle="Conversaciones de Sofía con más potencial de venta, ordenadas por score — a quién contactar primero."
       />
 

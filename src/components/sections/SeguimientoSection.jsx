@@ -525,7 +525,6 @@ export function SeguimientoSection({ profile }) {
     <div>
       <SectionHeader
         icon={<PhoneCall size={20} color={COLORS.gold} />}
-        title="Seguimiento"
         subtitle="Conversaciones de Sofía que quedaron abiertas sin venta — escaladas sin cita y cerradas sin escalar, priorizadas por score."
       />
 

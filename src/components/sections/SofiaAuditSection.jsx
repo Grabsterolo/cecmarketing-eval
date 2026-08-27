@@ -106,7 +106,6 @@ export function SofiaAuditSection() {
   return (
     <div>
       <SectionHeader
-        title="Auditoría de Sofía"
         subtitle="Revisa una muestra de conversaciones reales contra las reglas de Sofía y reporta qué funciona y qué no"
         action={
           <Button onClick={runAudit} disabled={generating} style={{ flexShrink: 0 }}>

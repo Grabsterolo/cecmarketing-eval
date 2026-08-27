@@ -13,21 +13,6 @@ import { FilterSelect } from "../ui/FilterSelect.jsx";
 import { useIsMobile } from "../../hooks/useIsMobile.js";
 import { supabase } from "../../lib/supabase.js";
 
-// Motivos de archivo que devuelve Zenvia en el breakdown de conversión.
-// "converted" y "campaignConversion" son los que el Worker cuenta como
-// conversión; "sinArchivar" lo inventa el Worker para los prospectos que
-// Zenvia todavía no archivó (siguen abiertos, no son un "no"). Cualquier
-// motivo que no esté acá se muestra tal cual lo manda Zenvia.
-const ARCHIVING_REASON_LABEL = {
-  converted: "Convertido",
-  campaignConversion: "Convertido por campaña",
-  sinArchivar: "Todavía abierto",
-  noAnswer: "Sin respuesta",
-  notInterested: "No interesado",
-  duplicated: "Duplicado",
-  invalidContact: "Contacto inválido",
-};
-
 // Los datos reales de sofia_conversations arrancan acá — igual que en
 // LeadsCalientesSection, un rango anterior a esta fecha no tiene nada que
 // mostrar y hay que avisarlo en vez de dejar una gráfica vacía sin explicar.
@@ -281,13 +266,6 @@ export function SofiaMetricsSection({ setActive }) {
 
   const [allConversations, setConversations] = useState([]);
   const [procedureFilter, setProcedureFilter] = useState("todos");
-
-  // La conversión no sale de Supabase: la calcula el Worker cruzando
-  // prospect_id contra el archivingReason de Zenvia. Por eso vive en su
-  // propio estado y no puede filtrarse por procedimiento — ver la nota en
-  // la tarjeta.
-  const [conversion, setConversion] = useState(null);
-  const [conversionState, setConversionState] = useState("loading");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
@@ -304,31 +282,6 @@ export function SofiaMetricsSection({ setActive }) {
       setLoading(false);
     })();
   }, [from, to]);
-
-  useEffect(() => {
-    let cancelled = false;
-    (async () => {
-      setConversionState("loading");
-      try {
-        const res = await fetch(`/api/conversion-stats?since=${from}T00:00:00-06:00`);
-        const data = await res.json().catch(() => ({}));
-        if (cancelled) return;
-        if (!res.ok) {
-          // 503 = falta configurar el Worker en Cloudflare. Se distingue del
-          // resto para poder decir qué hacer, en vez de mostrar un 0 que se
-          // leería como "nadie convirtió".
-          setConversionState(res.status === 503 ? "unconfigured" : "error");
-          setConversion(data);
-        } else {
-          setConversion(data);
-          setConversionState("ok");
-        }
-      } catch {
-        if (!cancelled) setConversionState("error");
-      }
-    })();
-    return () => { cancelled = true; };
-  }, [from]);
 
   useEffect(() => {
     (async () => {
@@ -369,26 +322,46 @@ export function SofiaMetricsSection({ setActive }) {
 
   const findingsCount = audit ? extractFindingTitles(audit.weaknesses).length : 0;
 
+  // Temas más consultados, calculado sobre las conversaciones ya filtradas.
+  // procedure_interest lo escribe Claude en texto libre, así que se agrupa
+  // sin distinguir mayúsculas ni tildes y se muestra la grafía más frecuente
+  // de cada grupo — si no, "Abdominoplastia" y "abdominoplastia" saldrían
+  // como dos temas distintos.
+  const { topTopics, distinctTopicCount } = useMemo(() => {
+    const groups = new Map();
+    for (const c of conversations) {
+      const raw = (c.procedure_interest || "").trim();
+      if (!raw) continue;
+      const key = normalize(raw);
+      const g = groups.get(key) || { count: 0, escalated: 0, labels: new Map() };
+      g.count += 1;
+      if (c.escalated) g.escalated += 1;
+      g.labels.set(raw, (g.labels.get(raw) || 0) + 1);
+      groups.set(key, g);
+    }
+
+    const ranked = [...groups.values()]
+      .map((g) => ({
+        topic: [...g.labels.entries()].sort((a, b) => b[1] - a[1])[0][0],
+        count: g.count,
+        pctEscalated: Math.round((g.escalated / g.count) * 100),
+      }))
+      .sort((a, b) => b.count - a.count);
+
+    const top = ranked.slice(0, 8);
+    const max = top.length > 0 ? top[0].count : 1;
+    return {
+      topTopics: top.map((t) => ({ ...t, pctOfTop: Math.round((t.count / max) * 100) })),
+      distinctTopicCount: ranked.length,
+    };
+  }, [conversations]);
+
   return (
     <div>
       <SectionHeader
         icon={<MessageCircle size={20} color={SOURCE_COLORS.sofia} />}
-        title="Métricas Sofía"
         subtitle="Volumen, escalación y calidad de las conversaciones de Sofía en el rango elegido."
       />
-
-      {/* De dónde salen estas cifras. Sin esto, "Tono neutral o positivo: 96%"
-          se lee como una encuesta de satisfacción cuando en realidad es la
-          clasificación que hace Claude leyendo cada conversación. */}
-      <p style={{
-        margin: "0 0 16px", fontSize: 12, lineHeight: 1.5,
-        color: COLORS.textMuted, fontFamily: "'Manrope', sans-serif", maxWidth: "70ch",
-      }}>
-        El tono, la escalación y el procedimiento consultado los clasifica Claude
-        automáticamente al leer cada conversación — no provienen de encuestas al paciente
-        ni de etiquetas puestas a mano. Se cuentan conversaciones, no personas: alguien que
-        escribió dos veces aparece dos veces.
-      </p>
 
       <div style={{ display: "flex", alignItems: "center", gap: 16, flexWrap: "wrap" }}>
         <DateRangePicker from={from} to={to} setFrom={setFrom} setTo={setTo} />
@@ -398,6 +371,19 @@ export function SofiaMetricsSection({ setActive }) {
           options={PROCEDURE_GROUPS}
         />
       </div>
+
+      {/* De dónde salen estas cifras. Sin esto, "Tono neutral o positivo: 99%"
+          se lee como una encuesta de satisfacción cuando en realidad es la
+          clasificación que hace Claude leyendo cada conversación. Va como nota
+          al pie de los filtros y no entre el subtítulo y los controles, donde
+          partía el encabezado en dos. */}
+      <p style={{
+        margin: "-4px 0 20px", fontSize: 12, lineHeight: 1.5,
+        color: COLORS.textMuted, fontFamily: "'Manrope', sans-serif",
+      }}>
+        El tono, la escalación y el procedimiento los clasifica Claude al leer cada
+        conversación — no son encuestas al paciente. Se cuentan conversaciones, no personas.
+      </p>
 
       {error && <ErrorBanner>{error}</ErrorBanner>}
 
@@ -442,96 +428,60 @@ export function SofiaMetricsSection({ setActive }) {
           </div>
 
           <Card>
-            <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", gap: 12, flexWrap: "wrap", marginBottom: 12 }}>
+            <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", gap: 12, flexWrap: "wrap", marginBottom: 4 }}>
               <h3 style={{ margin: 0, fontSize: 18, fontFamily: "'Cormorant Garamond', serif", fontWeight: 600, color: COLORS.green }}>
-                Conversión a paciente
+                Temas más consultados
               </h3>
-              {conversionState === "ok" && conversion?.conversationsWithProspectId > 0 && (
-                <span style={{ fontSize: 12, color: COLORS.textMuted, fontFamily: "'Manrope', sans-serif" }}>
-                  {conversion.converted} de {conversion.conversationsWithProspectId} prospectos
-                </span>
-              )}
+              <span style={{ fontSize: 12, color: COLORS.textMuted, fontFamily: "'Manrope', sans-serif" }}>
+                {topTopics.length > 0 ? `${topTopics.length} de ${distinctTopicCount} temas` : ""}
+              </span>
             </div>
+            <p style={{ margin: "0 0 16px", fontSize: 13, color: COLORS.textMuted, fontFamily: "'Manrope', sans-serif" }}>
+              Qué pregunta la gente, y qué tanto de cada tema termina con un asesor.
+            </p>
 
-            {conversionState === "loading" && (
+            {topTopics.length === 0 ? (
               <p style={{ margin: 0, fontSize: 13, color: COLORS.textMuted, fontFamily: "'Manrope', sans-serif" }}>
-                Consultando a Zenvia...
+                Ninguna conversación del rango tiene procedimiento identificado.
               </p>
-            )}
-
-            {conversionState === "unconfigured" && (
-              <p style={{ margin: 0, fontSize: 13, color: COLORS.textMuted, fontFamily: "'Manrope', sans-serif", lineHeight: 1.6 }}>
-                Falta configurar <code>SOFIA_WORKER_URL</code> y <code>SOFIA_WORKER_STATS_SECRET</code> en
-                Cloudflare Pages. Sin eso no se puede calcular la conversión — no es que sea cero.
-              </p>
-            )}
-
-            {conversionState === "error" && (
-              <p style={{ margin: 0, fontSize: 13, color: COLORS.warning, fontFamily: "'Manrope', sans-serif", lineHeight: 1.6 }}>
-                No se pudo consultar la conversión{conversion?.error ? `: ${conversion.error}` : "."} El dato
-                vive en Zenvia, así que este error no afecta al resto de las métricas.
-              </p>
-            )}
-
-            {conversionState === "ok" && (
-              conversion?.conversationsWithProspectId === 0 ? (
-                <p style={{ margin: 0, fontSize: 13, color: COLORS.textMuted, fontFamily: "'Manrope', sans-serif", lineHeight: 1.6 }}>
-                  Ninguna conversación de este rango tiene identificador de Zenvia todavía, así que no hay
-                  conversión que medir.
-                </p>
-              ) : (
-                <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
-                  <MetricKpi
-                    label="Conversión"
-                    value={`${Math.round((conversion.conversionRate || 0) * 1000) / 10}%`}
-                    sub={conversion.truncated
-                      ? "Mínimo — el real es más alto, ver aviso abajo"
-                      : "Prospectos que Zenvia marcó como convertidos"}
-                  />
-
-                  {/* El Worker avisa cuando la lista de archivados de Zenvia
-                      llegó a su tope de 5000: los que no vinieron se cuentan
-                      como no convertidos, así que el porcentaje es un piso,
-                      no el dato exacto. */}
-                  {conversion.truncated && (
-                    <p style={{
-                      margin: 0, fontSize: 12.5, lineHeight: 1.55,
-                      color: COLORS.warning, background: COLORS.warningBg,
-                      border: `1px solid ${COLORS.warningBorder}`,
-                      borderRadius: 8, padding: "10px 12px",
-                      fontFamily: "'Manrope', sans-serif",
+            ) : (
+              <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+                {topTopics.map((t) => (
+                  <div key={t.topic}>
+                    <div style={{
+                      display: "flex", justifyContent: "space-between", alignItems: "baseline",
+                      gap: 12, marginBottom: 4, fontSize: 13, fontFamily: "'Manrope', sans-serif",
                     }}>
-                      Zenvia devolvió su máximo de 5.000 prospectos archivados, así que hay conversiones
-                      que no se alcanzan a ver: <strong>este porcentaje es un mínimo, el real es más
-                      alto</strong>. Su API no permite pedir el resto por partes; para medirlo bien hay
-                      que empezar a guardar el resultado de cada prospecto en la base de datos.
-                    </p>
-                  )}
-                  <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
-                    {Object.entries(conversion.breakdown || {})
-                      .sort((a, b) => b[1] - a[1])
-                      .map(([reason, n]) => (
-                        <span key={reason} style={{
-                          fontSize: 12, fontFamily: "'Manrope', sans-serif",
-                          background: COLORS.panelAlt, color: COLORS.text,
-                          borderRadius: 100, padding: "4px 10px",
-                        }}>
-                          {ARCHIVING_REASON_LABEL[reason] || reason}: <strong>{n}</strong>
-                        </span>
-                      ))}
+                      <span style={{ color: COLORS.text, fontWeight: 600 }}>{t.topic}</span>
+                      <span style={{ color: COLORS.textMuted, whiteSpace: "nowrap" }}>
+                        {t.count} · {t.pctEscalated}% a un asesor
+                      </span>
+                    </div>
+                    {/* La barra mide volumen (relativo al tema más consultado);
+                        el tramo dorado, cuántas de esas llegaron a un humano. */}
+                    <div style={{
+                      height: 10, borderRadius: 4, background: "rgba(31,74,64,0.08)",
+                      overflow: "hidden",
+                    }}>
+                      <div style={{
+                        width: `${t.pctOfTop}%`, height: "100%",
+                        background: COLORS.green, borderRadius: 4,
+                        display: "flex", justifyContent: "flex-end",
+                      }}>
+                        <div style={{ width: `${t.pctEscalated}%`, height: "100%", background: COLORS.gold }} />
+                      </div>
+                    </div>
                   </div>
-                </div>
-              )
+                ))}
+              </div>
             )}
 
             <p style={{
-              margin: "14px 0 0", fontSize: 11.5, lineHeight: 1.5,
+              margin: "16px 0 0", fontSize: 11.5, lineHeight: 1.5,
               color: COLORS.textMuted, fontFamily: "'Manrope', sans-serif",
             }}>
-              Único dato de esta pantalla que no sale de Supabase: lo calcula el Worker cruzando cada
-              conversación contra el estado del prospecto en Zenvia. Solo cubre conversaciones con
-              identificador de Zenvia — el histórico anterior no es recuperable — y por eso
-              <strong> no responde al filtro de procedimiento</strong> ni al día final del rango.
+              El largo de la barra es el volumen del tema; el tramo dorado, la parte que pasó a un asesor.
+              Responde al rango de fechas y al filtro de procedimiento.
             </p>
           </Card>
 
