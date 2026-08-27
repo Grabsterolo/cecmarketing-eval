@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { PhoneCall, ExternalLink, ChevronDown, ChevronLeft, ChevronRight, Smile, Minus, Frown } from "lucide-react";
 import { COLORS } from "../../constants/colors.js";
-import { PROCEDURE_GROUPS, matchesProcedure, formatProcedure } from "../../constants/procedures.js";
+import { PROCEDURE_OPTIONS, matchesProcedure, formatProcedure } from "../../constants/procedures.js";
 import { Card } from "../ui/Card.jsx";
 import { SELECT_STYLE, FilterSelect } from "../ui/FilterSelect.jsx";
 import { Badge } from "../ui/Badge.jsx";
@@ -24,7 +24,7 @@ const PAGE_SIZE = 25;
 // SofiaMetricsSection.jsx.
 const FETCH_PAGE_SIZE = 1000;
 
-const QUEUE_COLUMNS = "id, phone_number, phone_hash, procedure_interest, escalation_reason, channel, message_count, sentiment, created_at, prospect_id, origen, categoria, score, estado, nota, actualizado_por";
+const QUEUE_COLUMNS = "id, phone_number, phone_hash, procedure_interest, procedure_code, escalation_reason, channel, message_count, sentiment, created_at, prospect_id, origen, categoria, score, estado, nota, actualizado_por";
 
 const ORIGEN_LABEL = { escalada_sin_cita: "Escalada sin cita", cerrada_sin_escalar: "Cerrada sin escalar" };
 const CATEGORIA_LABEL = { cirugia: "Cirugía", tratamiento_no_quirurgico: "No quirúrgico" };
@@ -198,7 +198,7 @@ function FilterBar({
           <option value="facebook">Facebook</option>
         </select>
 
-        <FilterSelect value={procedimiento} onChange={setProcedimiento} options={PROCEDURE_GROUPS} />
+        <FilterSelect value={procedimiento} onChange={setProcedimiento} options={PROCEDURE_OPTIONS} />
       </div>
 
       <input
@@ -517,7 +517,7 @@ export function SeguimientoSection({ profile }) {
       if (categoria !== "todos" && r.categoria !== categoria) return false;
       if (estado !== "todos" && r.estado !== estado) return false;
       if (canal !== "todos" && r.channel !== canal) return false;
-      if (!matchesProcedure(r.procedure_interest, procedimiento)) return false;
+      if (!matchesProcedure(r.procedure_code, procedimiento)) return false;
       if (q && !normalize(r.procedure_interest).includes(q)) return false;
       return true;
     });

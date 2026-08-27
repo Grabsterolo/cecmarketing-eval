@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from "react";
 import { Flame, ExternalLink, Copy, Check, ChevronLeft, ChevronRight, ChevronDown } from "lucide-react";
 import { COLORS } from "../../constants/colors.js";
-import { PROCEDURE_GROUPS, procedureOrFilter, formatProcedure } from "../../constants/procedures.js";
+import { PROCEDURE_OPTIONS, codesFor, formatProcedure } from "../../constants/procedures.js";
 import { Card } from "../ui/Card.jsx";
 import { SELECT_STYLE, FilterSelect } from "../ui/FilterSelect.jsx";
 import { Badge } from "../ui/Badge.jsx";
@@ -269,7 +269,7 @@ function FilterBar({ escalatedOnly, setEscalatedOnly, sentimentFilter, setSentim
         <option value="bajo">Bajo (&lt;40)</option>
       </select>
 
-      <FilterSelect value={procedureFilter} onChange={setProcedureFilter} options={PROCEDURE_GROUPS} />
+      <FilterSelect value={procedureFilter} onChange={setProcedureFilter} options={PROCEDURE_OPTIONS} />
     </div>
   );
 }
@@ -461,10 +461,10 @@ function applyServerFilters(query, { escalatedOnly, sentimentFilter, procedureFi
     q = q.eq("sentiment", sentimentFilter);
   }
 
-  // Varios .or() encadenados se combinan con AND entre sí, que es lo que
-  // queremos: (fecha) AND (calificación) AND (alguno de los patrones del grupo).
-  const procedureOr = procedureOrFilter(procedureFilter);
-  if (procedureOr) q = q.or(procedureOr);
+  // procedure_code es una columna generada e indexada, así que el filtro es
+  // un IN exacto — antes esto era un .or() con hasta 9 ilike encadenados.
+  const codes = codesFor(procedureFilter);
+  if (codes) q = q.in("procedure_code", codes);
 
   return q;
 }

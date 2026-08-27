@@ -4,7 +4,7 @@ import {
 } from "recharts";
 import { MessageCircle } from "lucide-react";
 import { COLORS, SOURCE_COLORS } from "../../constants/colors.js";
-import { PROCEDURE_GROUPS, matchesProcedure, formatProcedure } from "../../constants/procedures.js";
+import { PROCEDURE_OPTIONS, matchesProcedure, procedureLabel } from "../../constants/procedures.js";
 import { Card } from "../ui/Card.jsx";
 import { ErrorBanner } from "../ui/ErrorBanner.jsx";
 import { SectionHeader } from "../ui/SectionHeader.jsx";
@@ -94,7 +94,7 @@ async function fetchAllInRange(from, to) {
   for (;;) {
     const { data, error } = await supabase
       .from("sofia_conversations")
-      .select("id, sentiment, escalated, escalation_reason, created_at, procedure_interest")
+      .select("id, sentiment, escalated, escalation_reason, created_at, procedure_code")
       .gte("created_at", `${from}T00:00:00-06:00`)
       .lte("created_at", `${to}T23:59:59-06:00`)
       .order("created_at", { ascending: true })
@@ -311,7 +311,7 @@ export function SofiaMetricsSection({ setActive }) {
   // todas las filas del rango para calcular los KPIs, así que no hace falta
   // volver a consultar Supabase al cambiarlo.
   const conversations = useMemo(
-    () => allConversations.filter((c) => matchesProcedure(c.procedure_interest, procedureFilter)),
+    () => allConversations.filter((c) => matchesProcedure(c.procedure_code, procedureFilter)),
     [allConversations, procedureFilter]
   );
 
@@ -334,22 +334,33 @@ export function SofiaMetricsSection({ setActive }) {
   // sin distinguir mayúsculas ni tildes y se muestra la grafía más frecuente
   // de cada grupo — si no, "Abdominoplastia" y "abdominoplastia" saldrían
   // como dos temas distintos.
+  // Agrupa por procedure_code, la columna generada que normaliza el texto
+  // libre de procedure_interest a la taxonomía cerrada. Antes esto agrupaba
+  // por el texto crudo y salían 1.323 "temas" — casi todos la misma cosa
+  // escrita distinto.
+  //
+  // Los códigos que no son un procedimiento (solo preguntó precio, logística,
+  // sin especificar) se dejan fuera: inflaban el ranking sin decir nada de
+  // qué le interesa a la gente.
   const { topTopics, distinctTopicCount } = useMemo(() => {
+    const NO_PROCEDIMIENTO = new Set([
+      "generico_sin_procedimiento", "generico_solo_precio", "generico_logistica",
+      "generico_proceso", "no_paciente_laboral", "promociones", "sin_clasificar",
+    ]);
+
     const groups = new Map();
     for (const c of conversations) {
-      const raw = (c.procedure_interest || "").trim();
-      if (!raw) continue;
-      const key = normalize(raw);
-      const g = groups.get(key) || { count: 0, escalated: 0, labels: new Map() };
+      const code = c.procedure_code;
+      if (!code || NO_PROCEDIMIENTO.has(code)) continue;
+      const g = groups.get(code) || { count: 0, escalated: 0 };
       g.count += 1;
       if (c.escalated) g.escalated += 1;
-      g.labels.set(raw, (g.labels.get(raw) || 0) + 1);
-      groups.set(key, g);
+      groups.set(code, g);
     }
 
-    const ranked = [...groups.values()]
-      .map((g) => ({
-        topic: [...g.labels.entries()].sort((a, b) => b[1] - a[1])[0][0],
+    const ranked = [...groups.entries()]
+      .map(([code, g]) => ({
+        topic: procedureLabel(code),
         count: g.count,
         pctEscalated: Math.round((g.escalated / g.count) * 100),
       }))
@@ -375,7 +386,7 @@ export function SofiaMetricsSection({ setActive }) {
         <FilterSelect
           value={procedureFilter}
           onChange={setProcedureFilter}
-          options={PROCEDURE_GROUPS}
+          options={PROCEDURE_OPTIONS}
         />
       </div>
 
@@ -459,7 +470,7 @@ export function SofiaMetricsSection({ setActive }) {
                       display: "flex", justifyContent: "space-between", alignItems: "baseline",
                       gap: 12, marginBottom: 4, fontSize: 13, fontFamily: "'Manrope', sans-serif",
                     }}>
-                      <span style={{ color: COLORS.text, fontWeight: 600 }}>{formatProcedure(t.topic)}</span>
+                      <span style={{ color: COLORS.text, fontWeight: 600 }}>{t.topic}</span>
                       <span style={{ color: COLORS.textMuted, whiteSpace: "nowrap" }}>
                         {t.count} · {t.pctEscalated}% a un asesor
                       </span>

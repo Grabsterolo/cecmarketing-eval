@@ -11,18 +11,35 @@ export const SELECT_STYLE = {
   outline: "none", fontFamily: "'Manrope', sans-serif", cursor: "pointer",
 };
 
-// Select de filtro con opciones { value, label }, para los filtros que se
-// arman desde una lista (procedimiento, por ejemplo). Los filtros con
-// opciones escritas a mano pueden seguir usando SELECT_STYLE directamente.
+// Select de filtro con opciones { value, label, group? }. Si una opción trae
+// `group`, se agrupa con <optgroup> — así el filtro de procedimiento puede
+// ofrecer la familia entera y sus procedimientos sueltos sin que la lista se
+// vuelva una tirada plana de 45 entradas.
 export function FilterSelect({ value, onChange, options, style }) {
+  const sueltas = options.filter((o) => !o.group);
+  const grupos = [];
+  for (const o of options) {
+    if (!o.group) continue;
+    const ultimo = grupos[grupos.length - 1];
+    if (ultimo && ultimo.name === o.group) ultimo.items.push(o);
+    else grupos.push({ name: o.group, items: [o] });
+  }
+
   return (
     <select
       value={value}
       onChange={(e) => onChange(e.target.value)}
       style={style ? { ...SELECT_STYLE, ...style } : SELECT_STYLE}
     >
-      {options.map((o) => (
+      {sueltas.map((o) => (
         <option key={o.value} value={o.value}>{o.label}</option>
+      ))}
+      {grupos.map((g) => (
+        <optgroup key={g.name} label={g.name}>
+          {g.items.map((o) => (
+            <option key={o.value} value={o.value}>{o.label}</option>
+          ))}
+        </optgroup>
       ))}
     </select>
   );
