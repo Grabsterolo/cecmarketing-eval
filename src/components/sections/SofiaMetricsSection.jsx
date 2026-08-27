@@ -9,6 +9,7 @@ import { Card } from "../ui/Card.jsx";
 import { ErrorBanner } from "../ui/ErrorBanner.jsx";
 import { SectionHeader } from "../ui/SectionHeader.jsx";
 import { MetricKpi, tableStyles } from "../ui/MetricKpi.jsx";
+import { FilterSelect } from "../ui/FilterSelect.jsx";
 import { useIsMobile } from "../../hooks/useIsMobile.js";
 import { supabase } from "../../lib/supabase.js";
 
@@ -391,19 +392,11 @@ export function SofiaMetricsSection({ setActive }) {
 
       <div style={{ display: "flex", alignItems: "center", gap: 16, flexWrap: "wrap" }}>
         <DateRangePicker from={from} to={to} setFrom={setFrom} setTo={setTo} />
-        <select
+        <FilterSelect
           value={procedureFilter}
-          onChange={(e) => setProcedureFilter(e.target.value)}
-          style={{
-            background: COLORS.inputBg, border: `1.5px solid ${COLORS.border}`,
-            borderRadius: 8, padding: "8px 12px", color: COLORS.text, fontSize: 13,
-            outline: "none", fontFamily: "'Manrope', sans-serif", cursor: "pointer",
-          }}
-        >
-          {PROCEDURE_GROUPS.map((g) => (
-            <option key={g.value} value={g.value}>{g.label}</option>
-          ))}
-        </select>
+          onChange={setProcedureFilter}
+          options={PROCEDURE_GROUPS}
+        />
       </div>
 
       {error && <ErrorBanner>{error}</ErrorBanner>}

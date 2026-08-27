@@ -133,7 +133,7 @@ export function Dashboard({ onLogout, profile }) {
           <p style={{ fontSize: 11, letterSpacing: "0.25em", color: COLORS.gold, marginBottom: 6, textTransform: "uppercase", fontWeight: 600 }}>
             {getDateLabel()}
           </p>
-          <h1 style={{ fontFamily: "'Cormorant Garamond', serif", fontSize: 36, fontWeight: 600, margin: "0 0 6px", color: COLORS.green }}>
+          <h1 style={{ fontFamily: "'Cormorant Garamond', serif", fontSize: 38, fontWeight: 600, margin: "0 0 6px", color: COLORS.green }}>
             {isInicio ? getGreeting(firstName) : SECTION_TITLES[displayActive]}
           </h1>
           {isInicio && (

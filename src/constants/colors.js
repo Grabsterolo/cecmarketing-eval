@@ -22,7 +22,10 @@ export const COLORS = {
 };
 
 // Escala tipográfica fija — usar siempre uno de estos valores para fontSize.
-export const FONT_SIZES = [11, 12, 13, 14, 15, 16, 18, 20, 22, 26, 28, 34, 38];
+// El 10 es el escalón de micro-etiqueta: solo para texto en mayúsculas con
+// letter-spacing (los "eyebrow" del sidebar, el login y las tarjetas de
+// Inicio). No usarlo para texto corrido, que a ese tamaño no se lee.
+export const FONT_SIZES = [10, 11, 12, 13, 14, 15, 16, 18, 20, 22, 26, 28, 34, 38];
 
 // Escala de spacing (padding/margin/gap), siempre múltiplo de 4.
 export const SPACING = [4, 8, 12, 16, 20, 24, 32];

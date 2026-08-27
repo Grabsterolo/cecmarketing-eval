@@ -3,6 +3,7 @@ import { Flame, ExternalLink, Copy, Check, ChevronLeft, ChevronRight, ChevronDow
 import { COLORS } from "../../constants/colors.js";
 import { PROCEDURE_GROUPS, procedureOrFilter } from "../../constants/procedures.js";
 import { Card } from "../ui/Card.jsx";
+import { SELECT_STYLE, FilterSelect } from "../ui/FilterSelect.jsx";
 import { Badge } from "../ui/Badge.jsx";
 import { ErrorBanner } from "../ui/ErrorBanner.jsx";
 import { EmptyState } from "../ui/EmptyState.jsx";
@@ -241,12 +242,6 @@ function ZenviaButton({ prospectId, phoneNumber }) {
   );
 }
 
-const SELECT_STYLE = {
-  background: COLORS.inputBg, border: `1.5px solid ${COLORS.border}`,
-  borderRadius: 8, padding: "8px 12px", color: COLORS.text, fontSize: 13,
-  outline: "none", fontFamily: "'Manrope', sans-serif", cursor: "pointer",
-};
-
 function FilterBar({ escalatedOnly, setEscalatedOnly, sentimentFilter, setSentimentFilter, scoreFilter, setScoreFilter, procedureFilter, setProcedureFilter }) {
   return (
     <div style={{ display: "flex", alignItems: "center", gap: 16, flexWrap: "wrap", marginBottom: 20 }}>
@@ -274,11 +269,7 @@ function FilterBar({ escalatedOnly, setEscalatedOnly, sentimentFilter, setSentim
         <option value="bajo">Bajo (&lt;40)</option>
       </select>
 
-      <select value={procedureFilter} onChange={(e) => setProcedureFilter(e.target.value)} style={SELECT_STYLE}>
-        {PROCEDURE_GROUPS.map((g) => (
-          <option key={g.value} value={g.value}>{g.label}</option>
-        ))}
-      </select>
+      <FilterSelect value={procedureFilter} onChange={setProcedureFilter} options={PROCEDURE_GROUPS} />
     </div>
   );
 }

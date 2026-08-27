@@ -3,6 +3,7 @@ import { PhoneCall, ExternalLink, ChevronDown, ChevronLeft, ChevronRight, Smile,
 import { COLORS } from "../../constants/colors.js";
 import { PROCEDURE_GROUPS, matchesProcedure } from "../../constants/procedures.js";
 import { Card } from "../ui/Card.jsx";
+import { SELECT_STYLE, FilterSelect } from "../ui/FilterSelect.jsx";
 import { Badge } from "../ui/Badge.jsx";
 import { ErrorBanner } from "../ui/ErrorBanner.jsx";
 import { EmptyState } from "../ui/EmptyState.jsx";
@@ -150,12 +151,6 @@ function groupByPhone(rows) {
   return list;
 }
 
-const SELECT_STYLE = {
-  background: COLORS.inputBg, border: `1.5px solid ${COLORS.border}`,
-  borderRadius: 8, padding: "8px 12px", color: COLORS.text, fontSize: 13,
-  outline: "none", fontFamily: "'Manrope', sans-serif", cursor: "pointer",
-};
-
 const dateInputStyle = {
   background: COLORS.inputBg, border: `1.5px solid ${COLORS.border}`,
   borderRadius: 8, padding: "8px 12px", color: COLORS.text, fontSize: 13,
@@ -203,11 +198,7 @@ function FilterBar({
           <option value="facebook">Facebook</option>
         </select>
 
-        <select value={procedimiento} onChange={(e) => setProcedimiento(e.target.value)} style={SELECT_STYLE}>
-          {PROCEDURE_GROUPS.map((g) => (
-            <option key={g.value} value={g.value}>{g.label}</option>
-          ))}
-        </select>
+        <FilterSelect value={procedimiento} onChange={setProcedimiento} options={PROCEDURE_GROUPS} />
       </div>
 
       <input

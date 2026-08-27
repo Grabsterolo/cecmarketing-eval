@@ -51,7 +51,7 @@ function AuditBlockCard({ title, icon, accentColor, text }) {
     <Card style={{ flex: 1, minWidth: 260 }}>
       <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 14 }}>
         <span style={{ color: accentColor }}>{icon}</span>
-        <h4 style={{ margin: 0, fontFamily: "'Cormorant Garamond', serif", fontSize: 17, fontWeight: 600, color: COLORS.green }}>
+        <h4 style={{ margin: 0, fontFamily: "'Cormorant Garamond', serif", fontSize: 18, fontWeight: 600, color: COLORS.green }}>
           {title}
         </h4>
       </div>
