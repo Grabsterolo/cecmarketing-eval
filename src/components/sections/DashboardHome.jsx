@@ -59,6 +59,7 @@ function ConnectionIndicator() {
 export function DashboardHome({ profile }) {
   const isMobile = useIsMobile();
   const [metaData, setMetaData] = useState(null);
+  const [metaError, setMetaError] = useState(null);
   const [metaLoading, setMetaLoading] = useState(true);
   const [sofiaStats, setSofiaStats] = useState(null);
   const [sofiaLoading, setSofiaLoading] = useState(true);
@@ -66,8 +67,14 @@ export function DashboardHome({ profile }) {
   useEffect(() => {
     fetch("/api/meta-metrics")
       .then(r => r.json())
-      .then(data => { if (!data.error) setMetaData(data); })
-      .catch(() => {})
+      .then(data => {
+        // Un fallo NO puede terminar mostrando $0.00 y 0 leads: eso se lee
+        // como "no se invirtió nada" cuando en realidad no se pudo consultar
+        // a Meta. Mismo manejo que MetricsSection, que sí lo hacía bien.
+        if (data.error) setMetaError(data.error);
+        else setMetaData(data);
+      })
+      .catch(err => setMetaError(err.message))
       .finally(() => setMetaLoading(false));
   }, []);
 
@@ -95,9 +102,15 @@ export function DashboardHome({ profile }) {
     return () => { mounted = false; };
   }, []);
 
-  const totalInvestment = metaLoading
-    ? "..."
-    : `$${parseFloat(metaData?.totals?.spend || 0).toLocaleString("en-US", { minimumFractionDigits: 2 })}`;
+
+  // "..." mientras carga, "—" si Meta no respondió, y el valor real solo
+  // cuando de verdad hay dato. Sin esto, un fallo se veía igual que un cero
+  // medido.
+  const metaValue = (fn) => (metaLoading ? "..." : metaError ? "—" : fn());
+
+  const totalInvestment = metaValue(
+    () => `$${parseFloat(metaData?.totals?.spend || 0).toLocaleString("en-US", { minimumFractionDigits: 2 })}`
+  );
 
   // Barras del embudo calculadas a partir de datos reales: cada paso mide su
   // propia tasa de conversión (impresiones por $ invertido, leads por
@@ -114,23 +127,23 @@ export function DashboardHome({ profile }) {
     {
       color: SOURCE_COLORS.meta,
       label: "INVERSIÓN PUBLICITARIA",
-      numero: metaLoading
-        ? "..."
-        : `$${parseFloat(metaData?.totals?.spend || 0).toLocaleString("en-US", { minimumFractionDigits: 2 })}`,
+      numero: metaValue(
+        () => `$${parseFloat(metaData?.totals?.spend || 0).toLocaleString("en-US", { minimumFractionDigits: 2 })}`
+      ),
       desc: "Meta Ads este mes",
       barra: 100,
     },
     {
       color: SOURCE_COLORS.organico,
       label: "IMPRESIONES",
-      numero: metaLoading ? "..." : `${parseInt(metaData?.totals?.impressions || 0).toLocaleString()}`,
+      numero: metaValue(() => `${parseInt(metaData?.totals?.impressions || 0).toLocaleString()}`),
       desc: "Personas que vieron los anuncios",
       barra: metaLoading ? 0 : Math.round((impressionsPerDollar / maxRate) * 100),
     },
     {
       color: COLORS.gold,
       label: "LEADS GENERADOS",
-      numero: metaLoading ? "..." : `${parseInt(metaData?.totals?.leads || 0)}`,
+      numero: metaValue(() => `${parseInt(metaData?.totals?.leads || 0)}`),
       desc: "Contactos que dejaron sus datos",
       barra: metaLoading ? 0 : Math.round((leadsPerImpression / maxRate) * 100),
     },
@@ -201,7 +214,7 @@ export function DashboardHome({ profile }) {
             },
             {
               label: "LEADS GENERADOS",
-              value: metaLoading ? "..." : `${parseInt(metaData?.totals?.leads || 0)}`,
+              value: metaValue(() => `${parseInt(metaData?.totals?.leads || 0)}`),
               sub: "Contactos desde Meta Ads",
               border: false,
             },
@@ -231,6 +244,20 @@ export function DashboardHome({ profile }) {
 
         {/* Columna izquierda — Embudo */}
         <Card>
+          {/* Sin este aviso, los pasos del embudo se ven en "—" y no hay forma
+              de saber si Meta no respondió o si de verdad no hubo inversión. */}
+          {metaError && (
+            <p style={{
+              margin: "0 0 16px", fontSize: 12.5, lineHeight: 1.55,
+              color: COLORS.warning, background: COLORS.warningBg,
+              border: `1px solid ${COLORS.warningBorder}`,
+              borderRadius: 8, padding: "10px 12px", fontFamily: "'Manrope', sans-serif",
+            }}>
+              No se pudieron cargar los datos de Meta Ads, así que los pasos de inversión,
+              impresiones y leads aparecen sin valor. <strong>No significa que la inversión
+              haya sido cero.</strong> Las conversaciones de Sofía sí son reales.
+            </p>
+          )}
           <h3 style={{ margin: "0 0 20px", fontSize: 18, fontFamily: "'Cormorant Garamond', serif", fontWeight: 600, color: COLORS.green }}>
             El embudo de este mes
           </h3>
@@ -406,7 +433,7 @@ export function DashboardHome({ profile }) {
             <div style={{ width: 8, height: 8, borderRadius: "50%", background: SOURCE_COLORS.meta, flexShrink: 0 }} />
             <span style={{ fontSize: 13, fontWeight: 600, color: COLORS.text, fontFamily: "'Manrope', sans-serif" }}>Meta Ads</span>
           </div>
-          {metricCell("Gasto", metaLoading ? "..." : `$${parseFloat(metaData?.totals?.spend || 0).toLocaleString("en-US", { minimumFractionDigits: 2 })}`)}
+          {metricCell("Gasto", metaValue(() => `$${parseFloat(metaData?.totals?.spend || 0).toLocaleString("en-US", { minimumFractionDigits: 2 })}`))}
           {metricCell("CPL", metaLoading ? "..." : (metaData?.totals?.leads > 0
             ? `$${(parseFloat(metaData.totals.spend) / parseInt(metaData.totals.leads)).toFixed(2)}`
             : "—"))}
