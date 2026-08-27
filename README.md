@@ -7,7 +7,7 @@ Portal interno de mercadeo del Centro Europeo de Cirugía (CEC). Mismo sistema d
 
 - React 18 + Vite
 - Supabase (auth + base de datos)
-- Recharts (gráficos, cuando se conecten Meta/Google)
+- Recharts (gráficos)
 - Mismo sistema de diseño que el portal de colaboradores: verde `#1F4A40`, dorado `#C9A24E`, crema `#FAFAF8`, Cormorant Garamond + Manrope
 
 ## Estructura
@@ -44,7 +44,7 @@ functions/api/                  — Cloudflare Pages Functions (corren en el ser
   conversion-stats.js           — proxy al Worker /stats/conversion (sin consumidor)
   chat.js, audit-sofia.js, cleanup-scan.js, reindex.js, send-birthday.js
 supabase/schema.sql             — SQL base (NO incluye las migraciones recientes,
-                                  ver "Migraciones que solo viven en Supabase")
+                                  ver supabase/migrations/README.md)
 ```
 
 ## Variables de entorno
@@ -109,11 +109,22 @@ Se puede automatizar conectando el repo del Worker en Cloudflare →
 Settings → Builds. No se hizo: deja pasar a producción sin revisión, y ahí
 corre la conversación real con pacientes.
 
-### Migraciones que solo viven en Supabase, no en git
+### Migraciones
 
-`supabase/schema.sql` **está desactualizado**. Estas migraciones se aplicaron
-directo y no hay rastro de ellas en el repo — si alguien recrea la base desde
-el schema, el dashboard se rompe:
+El SQL de las migraciones de agosto 2026 **ya está volcado** en
+`supabase/migrations/` (ver el README de esa carpeta). Pero ojo con dos cosas:
+
+- **No se aplican solas.** No hay CLI de Supabase configurado ni CI: son un
+  registro para leer y revisar, no automatización. Aplicar y archivar son dos
+  pasos separados.
+- **`supabase/schema.sql` sigue desactualizado.** No incluye nada de esto, así
+  que recrear la base desde ese archivo deja el dashboard roto.
+
+La fuente de verdad es Supabase, que lleva 49 migraciones registradas contra
+las 9 archivadas acá. Las que faltan son sobre todo cambios al prompt y a la
+base de conocimiento de Sofía.
+
+Las que importan para que el dashboard funcione:
 
 | Migración | Qué hace |
 |---|---|
@@ -125,8 +136,8 @@ el schema, el dashboard se rompe:
 | `sofia_conversations_updated_at` | Columna `updated_at` + trigger. |
 | `sofia_pacientes_v2` | Vista `sofia_pacientes`, base de la sección Pacientes. |
 
-**Pendiente:** volcar todo esto a `supabase/migrations/` para que quede
-versionado.
+**Hecho el 2026-08-27:** el SQL está en `supabase/migrations/`. Lo que sigue
+pendiente es configurar el CLI o CI para que se apliquen solos.
 
 ### Cómo se clasifican las conversaciones
 
@@ -295,8 +306,8 @@ tocar `processInboundMessage()` o la deduplicación de interacciones.
 
 ### Técnicos
 
-- **Versionar las migraciones** en `supabase/migrations/` — hoy solo viven en
-  Supabase (ver la tabla en "Estado al 2026-08-27").
+- **Automatizar las migraciones.** El SQL ya está en `supabase/migrations/`,
+  pero no hay CLI ni CI que lo aplique, y `schema.sql` sigue desactualizado.
 - **RLS desactivado en `sofia_inactivity_cleanup`.** Cualquiera con la clave
   pública puede leer y escribir esa tabla. No la usa el dashboard, pero
   conviene cerrarla.
