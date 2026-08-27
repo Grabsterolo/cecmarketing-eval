@@ -123,7 +123,7 @@ export function PacientesSection() {
       const [datos, conteo] = await Promise.all([
         aplicarFiltros(
           supabase.from("sofia_pacientes").select(
-            "phone_hash, telefono, prospect_id, procedure_code, sentiment, alguna_vez_escalada, conversaciones, ultima_actividad"
+            "phone_hash, telefono, prospect_id, procedure_code, sentiment, alguna_vez_escalada, mensajes, ultima_actividad, primer_contacto"
           )
         ).order("ultima_actividad", { ascending: false }).range(desde, desde + PAGE_SIZE - 1),
         aplicarFiltros(supabase.from("sofia_pacientes").select("phone_hash", { count: "exact", head: true })),
@@ -227,7 +227,7 @@ export function PacientesSection() {
             <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13, fontFamily: "'Manrope', sans-serif" }}>
               <thead>
                 <tr>
-                  {["Teléfono", "Interés", "Conversaciones", "Última actividad", ""].map((h, i) => (
+                  {["Teléfono", "Interés", "Mensajes", "Última actividad", "Primer contacto", ""].map((h, i) => (
                     <th key={h || i} style={{
                       textAlign: i === 2 ? "right" : "left",
                       padding: "14px 16px",
@@ -257,10 +257,13 @@ export function PacientesSection() {
                         )}
                       </td>
                       <td style={{ padding: "12px 16px", borderBottom: `1px solid ${COLORS.border}`, textAlign: "right", fontVariantNumeric: "tabular-nums" }}>
-                        {f.conversaciones}
+                        {f.mensajes}
                       </td>
                       <td style={{ padding: "12px 16px", borderBottom: `1px solid ${COLORS.border}`, color: COLORS.textMuted, whiteSpace: "nowrap" }}>
                         {formatFecha(f.ultima_actividad)}
+                      </td>
+                      <td style={{ padding: "12px 16px", borderBottom: `1px solid ${COLORS.border}`, color: COLORS.textMuted, whiteSpace: "nowrap" }}>
+                        {formatFecha(f.primer_contacto)}
                       </td>
                       <td style={{ padding: "12px 16px", borderBottom: `1px solid ${COLORS.border}`, textAlign: "right" }}>
                         <ZenviaLink prospectId={f.prospect_id} />
