@@ -491,8 +491,29 @@ export function SofiaMetricsSection({ setActive }) {
                   <MetricKpi
                     label="Conversión"
                     value={`${Math.round((conversion.conversionRate || 0) * 1000) / 10}%`}
-                    sub="Prospectos que Zenvia marcó como convertidos"
+                    sub={conversion.truncated
+                      ? "Mínimo — el real es más alto, ver aviso abajo"
+                      : "Prospectos que Zenvia marcó como convertidos"}
                   />
+
+                  {/* El Worker avisa cuando la lista de archivados de Zenvia
+                      llegó a su tope de 5000: los que no vinieron se cuentan
+                      como no convertidos, así que el porcentaje es un piso,
+                      no el dato exacto. */}
+                  {conversion.truncated && (
+                    <p style={{
+                      margin: 0, fontSize: 12.5, lineHeight: 1.55,
+                      color: COLORS.warning, background: COLORS.warningBg,
+                      border: `1px solid ${COLORS.warningBorder}`,
+                      borderRadius: 8, padding: "10px 12px",
+                      fontFamily: "'Manrope', sans-serif",
+                    }}>
+                      Zenvia devolvió su máximo de 5.000 prospectos archivados, así que hay conversiones
+                      que no se alcanzan a ver: <strong>este porcentaje es un mínimo, el real es más
+                      alto</strong>. Su API no permite pedir el resto por partes; para medirlo bien hay
+                      que empezar a guardar el resultado de cada prospecto en la base de datos.
+                    </p>
+                  )}
                   <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
                     {Object.entries(conversion.breakdown || {})
                       .sort((a, b) => b[1] - a[1])
