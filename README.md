@@ -139,6 +139,38 @@ Las que importan para que el dashboard funcione:
 **Hecho el 2026-08-27:** el SQL está en `supabase/migrations/`. Lo que sigue
 pendiente es configurar el CLI o CI para que se apliquen solos.
 
+### Seguridad — estado y lo que falta
+
+Revisado con el linter de Supabase el 2026-08-27, después de empezar a guardar
+teléfonos en claro. **Los dos hallazgos de nivel ERROR quedaron cerrados**
+(migración `endurecer_seguridad`):
+
+- `sofia_inactivity_cleanup` estaba **sin RLS y expuesta vía PostgREST** —
+  cualquiera con la clave pública la leía y escribía entera. Ahora tiene RLS
+  sin políticas: solo la alcanza el Worker con `SERVICE_ROLE_KEY`. El linter
+  la reporta como INFO "RLS enabled, no policy" — **es el estado buscado**.
+- `sofia_followup_candidates` (vista huérfana, la reemplazó
+  `sofia_followup_queue`) tenía SECURITY DEFINER y se saltaba las RLS. Ahora
+  es `security_invoker`.
+- `search_path` fijo en `sofia_procedure_code`, `sofia_home_stats`,
+  `sofia_touch_updated_at` y `match_sofia_chunks`.
+
+**Lo que sigue abierto, y necesita a una persona:**
+
+1. **Rotar `STATS_TRIGGER_SECRET`.** El valor actual se manejó en texto plano
+   y es débil. Es lo único que protege `GET /stats/prospect-phones`, un
+   endpoint público que devuelve **miles de teléfonos de pacientes**. Rotarlo
+   no rompe nada: `conversion-stats.js` no tiene consumidor. Valorar también
+   si ese endpoint debe seguir existiendo — la extracción ya se hizo.
+2. **Confirmar que el registro público esté deshabilitado** en Supabase Auth.
+   La política de `sofia_conversations` es `auth.role() = 'authenticated'`:
+   **no filtra por usuario ni por rol**, así que cualquier cuenta creada en
+   ese proyecto vería los 3.374 teléfonos. Hoy hay 2 usuarios y el último
+   registro es de junio, así que en la práctica está contenido.
+3. **Activar la protección de contraseñas filtradas** (WARN del linter).
+4. **La definición legal** — Ley 8968 y las restricciones de Meta sobre datos
+   de salud. Ya no es teórico: la base con los teléfonos existe.
+
 ### Cómo se clasifican las conversaciones
 
 `procedure_interest` lo escribe Claude en **texto libre**: 2.470 valores
@@ -308,9 +340,9 @@ tocar `processInboundMessage()` o la deduplicación de interacciones.
 
 - **Automatizar las migraciones.** El SQL ya está en `supabase/migrations/`,
   pero no hay CLI ni CI que lo aplique, y `schema.sql` sigue desactualizado.
-- **RLS desactivado en `sofia_inactivity_cleanup`.** Cualquiera con la clave
-  pública puede leer y escribir esa tabla. No la usa el dashboard, pero
-  conviene cerrarla.
+- **Rotar `STATS_TRIGGER_SECRET`** y decidir si `/stats/prospect-phones` debe
+  seguir existiendo (ver "Seguridad" más arriba). Es lo más urgente.
+- **Confirmar que el registro público esté cerrado** en Supabase Auth.
 - **El tope de 5.000 de Zenvia.** Afecta dos cosas: la conversión sale
   subcontada (`/stats/conversion` ya devuelve `truncated: true`, y se
   confirmó que el tope se está alcanzando), y la cobertura de teléfonos del
