@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from "react";
 import { Flame, ExternalLink, Copy, Check, ChevronLeft, ChevronRight, ChevronDown } from "lucide-react";
 import { COLORS } from "../../constants/colors.js";
+import { PROCEDURE_GROUPS, procedureOrFilter } from "../../constants/procedures.js";
 import { Card } from "../ui/Card.jsx";
 import { Badge } from "../ui/Badge.jsx";
 import { ErrorBanner } from "../ui/ErrorBanner.jsx";
@@ -449,45 +450,6 @@ function LeadRow({ conv }) {
   );
 }
 
-// Agrupaciones de procedure_interest. Claude escribe ese campo en texto libre,
-// así que el mismo procedimiento aparece con mayúsculas, acentos y orden de
-// palabras distintos ("MIA Femtech", "Aumento de senos Mia", "Mia® Femtech").
-// Cada grupo lista los fragmentos con los que se hace ilike; los patrones
-// salieron de los valores reales en la tabla, no de una lista teórica.
-//
-// Los grupos NO son mutuamente excluyentes a propósito: MIA Femtech es un
-// procedimiento mamario, así que esas conversaciones caen tanto en "MIA
-// Femtech" como en "Aumento mamario". Es intencional — permite ver el total
-// mamario o aislar MIA, según lo que se quiera medir.
-const PROCEDURE_GROUPS = [
-  { value: "todos", label: "Procedimiento: todos", patterns: null },
-  { value: "mia", label: "MIA Femtech", patterns: ["mia", "femtech"] },
-  {
-    value: "mamario",
-    label: "Aumento mamario (todo)",
-    patterns: ["aumento mamario", "aumento de senos", "aumento senos", "preservé", "preserve", "mastopexia", "armonización mamaria"],
-  },
-  { value: "abdominoplastia", label: "Abdominoplastia", patterns: ["abdominoplastia"] },
-  { value: "rinoplastia", label: "Rinoplastia", patterns: ["rinoplastia"] },
-  { value: "facial_qx", label: "Lifting facial / blefaroplastia", patterns: ["lifting facial", "blefaroplastia"] },
-  { value: "ultherapy", label: "Ultherapy", patterns: ["ultherapy"] },
-  {
-    value: "inyectables",
-    label: "Inyectables",
-    patterns: ["botox", "toxina", "hialurónico", "hialuronico", "radiesse", "harmonyca"],
-  },
-  {
-    value: "corporal_no_qx",
-    label: "Corporal no quirúrgico",
-    patterns: ["trilipo", "quantumrf", "lipopapada", "oxygeneo", "oxígeno", "liposucción papada"],
-  },
-  {
-    value: "sin_especificar",
-    label: "Sin especificar / general",
-    patterns: ["información general", "informacion general", "no especificado", "sin especificar", "consulta general", "información de precios", "consulta de precios"],
-  },
-];
-
 // Aplica los filtros que sí son columnas reales de sofia_conversations a un
 // query de Supabase ya iniciado (select/from). escalatedOnly reemplaza la
 // condición base de calificación (escalada O positiva+engagement) por
@@ -508,13 +470,10 @@ function applyServerFilters(query, { escalatedOnly, sentimentFilter, procedureFi
     q = q.eq("sentiment", sentimentFilter);
   }
 
-  const group = PROCEDURE_GROUPS.find((g) => g.value === procedureFilter);
-  if (group?.patterns) {
-    // ilike con * a ambos lados = "contiene", insensible a mayúsculas. Varios
-    // .or() encadenados se combinan con AND entre sí, que es lo que queremos:
-    // (fecha) AND (calificación) AND (alguno de los patrones del grupo).
-    q = q.or(group.patterns.map((p) => `procedure_interest.ilike.*${p}*`).join(","));
-  }
+  // Varios .or() encadenados se combinan con AND entre sí, que es lo que
+  // queremos: (fecha) AND (calificación) AND (alguno de los patrones del grupo).
+  const procedureOr = procedureOrFilter(procedureFilter);
+  if (procedureOr) q = q.or(procedureOr);
 
   return q;
 }

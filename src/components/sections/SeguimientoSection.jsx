@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { PhoneCall, ExternalLink, ChevronDown, ChevronLeft, ChevronRight, Smile, Minus, Frown } from "lucide-react";
 import { COLORS } from "../../constants/colors.js";
+import { PROCEDURE_GROUPS, matchesProcedure } from "../../constants/procedures.js";
 import { Card } from "../ui/Card.jsx";
 import { Badge } from "../ui/Badge.jsx";
 import { ErrorBanner } from "../ui/ErrorBanner.jsx";
@@ -164,6 +165,7 @@ const dateInputStyle = {
 function FilterBar({
   from, to, setFrom, setTo,
   origen, setOrigen, categoria, setCategoria, estado, setEstado, canal, setCanal,
+  procedimiento, setProcedimiento,
   search, setSearch,
 }) {
   return (
@@ -199,6 +201,12 @@ function FilterBar({
           <option value="todos">Canal: todos</option>
           <option value="whatsapp">WhatsApp</option>
           <option value="facebook">Facebook</option>
+        </select>
+
+        <select value={procedimiento} onChange={(e) => setProcedimiento(e.target.value)} style={SELECT_STYLE}>
+          {PROCEDURE_GROUPS.map((g) => (
+            <option key={g.value} value={g.value}>{g.label}</option>
+          ))}
         </select>
       </div>
 
@@ -425,6 +433,7 @@ export function SeguimientoSection({ profile }) {
   const [categoria, setCategoria] = useState("todos");
   const [estado, setEstado] = useState("pendiente");
   const [canal, setCanal] = useState("todos");
+  const [procedimiento, setProcedimiento] = useState("todos");
   const [search, setSearch] = useState("");
   const [page, setPage] = useState(1);
 
@@ -484,7 +493,7 @@ export function SeguimientoSection({ profile }) {
 
   // Cambiar cualquier filtro vuelve a la página 1 — si no, se puede quedar
   // viendo una página que ya no existe con el filtro nuevo.
-  useEffect(() => { setPage(1); }, [from, to, origen, categoria, estado, canal, search]);
+  useEffect(() => { setPage(1); }, [from, to, origen, categoria, estado, canal, procedimiento, search]);
 
   const updateStatus = useCallback(async (conversationId, patch) => {
     const prevRows = rawRows;
@@ -511,10 +520,11 @@ export function SeguimientoSection({ profile }) {
       if (categoria !== "todos" && r.categoria !== categoria) return false;
       if (estado !== "todos" && r.estado !== estado) return false;
       if (canal !== "todos" && r.channel !== canal) return false;
+      if (!matchesProcedure(r.procedure_interest, procedimiento)) return false;
       if (q && !normalize(r.procedure_interest).includes(q)) return false;
       return true;
     });
-  }, [rawRows, origen, categoria, estado, canal, search]);
+  }, [rawRows, origen, categoria, estado, canal, procedimiento, search]);
 
   const grouped = useMemo(() => groupByPhone(filtered), [filtered]);
   const totalPages = Math.max(1, Math.ceil(grouped.length / PAGE_SIZE));
@@ -549,6 +559,7 @@ export function SeguimientoSection({ profile }) {
         categoria={categoria} setCategoria={setCategoria}
         estado={estado} setEstado={setEstado}
         canal={canal} setCanal={setCanal}
+        procedimiento={procedimiento} setProcedimiento={setProcedimiento}
         search={search} setSearch={setSearch}
       />
 

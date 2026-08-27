@@ -4,6 +4,7 @@ import {
 } from "recharts";
 import { MessageCircle } from "lucide-react";
 import { COLORS, SOURCE_COLORS } from "../../constants/colors.js";
+import { PROCEDURE_GROUPS, matchesProcedure } from "../../constants/procedures.js";
 import { Card } from "../ui/Card.jsx";
 import { ErrorBanner } from "../ui/ErrorBanner.jsx";
 import { SectionHeader } from "../ui/SectionHeader.jsx";
@@ -92,7 +93,7 @@ async function fetchAllInRange(from, to) {
   for (;;) {
     const { data, error } = await supabase
       .from("sofia_conversations")
-      .select("id, sentiment, escalated, escalation_reason, created_at")
+      .select("id, sentiment, escalated, escalation_reason, created_at, procedure_interest")
       .gte("created_at", `${from}T00:00:00-06:00`)
       .lte("created_at", `${to}T23:59:59-06:00`)
       .order("created_at", { ascending: true })
@@ -262,7 +263,8 @@ export function SofiaMetricsSection({ setActive }) {
   const [from, setFrom] = useState(daysAgoISO(15));
   const [to, setTo] = useState(todayISO());
 
-  const [conversations, setConversations] = useState([]);
+  const [allConversations, setConversations] = useState([]);
+  const [procedureFilter, setProcedureFilter] = useState("todos");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
@@ -297,6 +299,14 @@ export function SofiaMetricsSection({ setActive }) {
 
   const rangeBeforeData = to < SOFIA_DATA_LIVE_SINCE;
 
+  // El filtro de procedimiento se aplica en memoria: esta sección ya trae
+  // todas las filas del rango para calcular los KPIs, así que no hace falta
+  // volver a consultar Supabase al cambiarlo.
+  const conversations = useMemo(
+    () => allConversations.filter((c) => matchesProcedure(c.procedure_interest, procedureFilter)),
+    [allConversations, procedureFilter]
+  );
+
   const dailySeries = useMemo(() => buildDailySeries(conversations, from, to), [conversations, from, to]);
 
   const totalConversations = conversations.length;
@@ -319,7 +329,35 @@ export function SofiaMetricsSection({ setActive }) {
         subtitle="Volumen, escalación y calidad de las conversaciones de Sofía en el rango elegido."
       />
 
-      <DateRangePicker from={from} to={to} setFrom={setFrom} setTo={setTo} />
+      {/* De dónde salen estas cifras. Sin esto, "Tono neutral o positivo: 96%"
+          se lee como una encuesta de satisfacción cuando en realidad es la
+          clasificación que hace Claude leyendo cada conversación. */}
+      <p style={{
+        margin: "0 0 16px", fontSize: 12, lineHeight: 1.5,
+        color: COLORS.textMuted, fontFamily: "'Manrope', sans-serif", maxWidth: "70ch",
+      }}>
+        El tono, la escalación y el procedimiento consultado los clasifica Claude
+        automáticamente al leer cada conversación — no provienen de encuestas al paciente
+        ni de etiquetas puestas a mano. Se cuentan conversaciones, no personas: alguien que
+        escribió dos veces aparece dos veces.
+      </p>
+
+      <div style={{ display: "flex", alignItems: "center", gap: 16, flexWrap: "wrap" }}>
+        <DateRangePicker from={from} to={to} setFrom={setFrom} setTo={setTo} />
+        <select
+          value={procedureFilter}
+          onChange={(e) => setProcedureFilter(e.target.value)}
+          style={{
+            background: COLORS.inputBg, border: `1.5px solid ${COLORS.border}`,
+            borderRadius: 8, padding: "8px 12px", color: COLORS.text, fontSize: 13,
+            outline: "none", fontFamily: "'Manrope', sans-serif", cursor: "pointer",
+          }}
+        >
+          {PROCEDURE_GROUPS.map((g) => (
+            <option key={g.value} value={g.value}>{g.label}</option>
+          ))}
+        </select>
+      </div>
 
       {error && <ErrorBanner>{error}</ErrorBanner>}
 
@@ -342,13 +380,17 @@ export function SofiaMetricsSection({ setActive }) {
 
           <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr 1fr" : "repeat(4,1fr)", gap: 16 }}>
             <Card>
-              <MetricKpi label="Conversaciones" value={`${totalConversations}`} sub="Total en el rango" />
+              <MetricKpi
+                label="Conversaciones"
+                value={`${totalConversations}`}
+                sub={procedureFilter === "todos" ? "Total en el rango" : "En el rango, del procedimiento filtrado"}
+              />
             </Card>
             <Card>
-              <MetricKpi label="Resuelto sin asesor" value={`${pctNoEscalado}%`} sub="No pasó a escalación" />
+              <MetricKpi label="Resuelto sin asesor" value={`${pctNoEscalado}%`} sub="Nunca pasó a escalación" />
             </Card>
             <Card>
-              <MetricKpi label="Tono neutral o positivo" value={`${pctTonoOk}%`} sub="Sobre el total del rango" />
+              <MetricKpi label="Tono neutral o positivo" value={`${pctTonoOk}%`} sub="Según lectura de IA, no es encuesta" />
             </Card>
             <Card>
               <MetricKpi
