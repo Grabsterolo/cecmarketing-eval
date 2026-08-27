@@ -115,7 +115,11 @@ const dateInputStyle = {
 
 function DateRangePicker({ from, to, setFrom, setTo }) {
   return (
-    <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap", marginBottom: 20 }}>
+    // Sin marginBottom propio: vive dentro de una fila centrada junto al
+    // filtro de procedimiento, y ese margen le sumaba alto solo a este
+    // bloque, dejando las fechas más arriba que el select. El espacio
+    // inferior lo pone la fila que los contiene.
+    <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
       <label style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 13, color: COLORS.textMuted, fontFamily: "'Manrope', sans-serif" }}>
         Desde
         <input type="date" value={from} max={to} onChange={(e) => setFrom(e.target.value)} style={dateInputStyle} />
@@ -381,7 +385,7 @@ export function SofiaMetricsSection({ setActive }) {
         subtitle="Volumen, escalación y calidad de las conversaciones de Sofía en el rango elegido."
       />
 
-      <div style={{ display: "flex", alignItems: "center", gap: 16, flexWrap: "wrap" }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 16, flexWrap: "wrap", marginBottom: 20 }}>
         <DateRangePicker from={from} to={to} setFrom={setFrom} setTo={setTo} />
         <FilterSelect
           value={procedureFilter}
@@ -389,19 +393,6 @@ export function SofiaMetricsSection({ setActive }) {
           options={PROCEDURE_OPTIONS}
         />
       </div>
-
-      {/* De dónde salen estas cifras. Sin esto, "Tono neutral o positivo: 99%"
-          se lee como una encuesta de satisfacción cuando en realidad es la
-          clasificación que hace Claude leyendo cada conversación. Va como nota
-          al pie de los filtros y no entre el subtítulo y los controles, donde
-          partía el encabezado en dos. */}
-      <p style={{
-        margin: "-4px 0 20px", fontSize: 12, lineHeight: 1.5,
-        color: COLORS.textMuted, fontFamily: "'Manrope', sans-serif",
-      }}>
-        El tono, la escalación y el procedimiento los clasifica Claude al leer cada
-        conversación — no son encuestas al paciente. Se cuentan conversaciones, no personas.
-      </p>
 
       {error && <ErrorBanner>{error}</ErrorBanner>}
 
