@@ -422,16 +422,16 @@ export function SofiaMetricsSection({ setActive }) {
               />
             </Card>
             <Card>
-              <MetricKpi label="Resuelto sin asesor" value={`${pctNoEscalado}%`} sub="Nunca pasó a escalación" />
+              <MetricKpi label="Sin escalar" value={`${pctNoEscalado}%`} sub="Resueltas sin asesor" />
             </Card>
             <Card>
-              <MetricKpi label="Tono neutral o positivo" value={`${pctTonoOk}%`} sub="Según lectura de IA, no es encuesta" />
+              <MetricKpi label="Sentimiento" value={`${pctTonoOk}%`} sub="Neutral o positivo" />
             </Card>
             <Card>
               <MetricKpi
-                label="Hallazgos activos"
+                label="Hallazgos"
                 value={audit ? `${findingsCount}` : "—"}
-                sub={audit ? "Última auditoría del rango" : "Sin auditoría en el rango"}
+                sub={audit ? "Última auditoría" : "Sin auditoría en el rango"}
               />
             </Card>
           </div>
