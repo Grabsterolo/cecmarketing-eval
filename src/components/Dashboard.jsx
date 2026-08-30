@@ -15,6 +15,7 @@ import { TestSofiaSection } from "./sections/TestSofiaSection.jsx";
 import { BirthdaySection } from "./sections/BirthdaySection.jsx";
 import { PacientesSection } from "./sections/PacientesSection.jsx";
 import { SeguimientoSection } from "./sections/SeguimientoSection.jsx";
+import { ConfiguracionSection } from "./sections/ConfiguracionSection.jsx";
 
 const SECTION_TITLES = {
   inicio: "Inicio",
@@ -28,6 +29,7 @@ const SECTION_TITLES = {
   cumpleanos: "Cumpleaños",
   seguimiento: "Seguimiento",
   pacientes: "Pacientes",
+  configuracion: "Configuración",
 };
 
 const DAYS = ["DOMINGO", "LUNES", "MARTES", "MIÉRCOLES", "JUEVES", "VIERNES", "SÁBADO"];
@@ -86,6 +88,7 @@ export function Dashboard({ onLogout, profile }) {
       case "cumpleanos": return <BirthdaySection />;
       case "seguimiento": return <SeguimientoSection profile={profile} />;
       case "pacientes": return <PacientesSection />;
+      case "configuracion": return profile?.role === "admin" ? <ConfiguracionSection profile={profile} /> : null;
       default: return null;
     }
   }
@@ -107,7 +110,7 @@ export function Dashboard({ onLogout, profile }) {
             <Menu size={18} />
           </button>
         </div>
-        <MobileDrawer open={drawerOpen} onClose={closeDrawer} active={active} setActive={navigate} onLogout={onLogout} />
+        <MobileDrawer open={drawerOpen} onClose={closeDrawer} active={active} setActive={navigate} onLogout={onLogout} profile={profile} />
         <div style={{ padding: "24px 16px 48px", ...dashboardInAnim }} onAnimationEnd={() => setDashDone(true)}>
           <div style={{ marginBottom: 20 }}>
             <p style={{ fontSize: 10, letterSpacing: "0.25em", color: COLORS.gold, marginBottom: 6, textTransform: "uppercase", fontWeight: 600 }}>
@@ -130,7 +133,7 @@ export function Dashboard({ onLogout, profile }) {
 
   return (
     <div style={{ display: "flex", minHeight: "100vh", background: COLORS.bg, fontFamily: "'Manrope', sans-serif" }}>
-      <Sidebar active={active} setActive={navigate} onLogout={onLogout} />
+      <Sidebar active={active} setActive={navigate} onLogout={onLogout} profile={profile} />
       <div style={{ flex: 1, minWidth: 0, padding: "36px 40px", ...dashboardInAnim }} onAnimationEnd={() => setDashDone(true)}>
         <div style={{ marginBottom: 32 }}>
           <p style={{ fontSize: 11, letterSpacing: "0.25em", color: COLORS.gold, marginBottom: 6, textTransform: "uppercase", fontWeight: 600 }}>

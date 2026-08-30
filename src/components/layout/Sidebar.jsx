@@ -1,7 +1,7 @@
 import React, { useEffect } from "react";
 import { LogOut, X } from "lucide-react";
 import { COLORS, SIDEBAR_BG } from "../../constants/colors.js";
-import { NAV_ITEMS } from "../../constants/nav.js";
+import { getVisibleNavItems } from "../../constants/nav.js";
 import { Logo } from "../ui/Logo.jsx";
 
 function NavButton({ item, isActive, onClick, mobile }) {
@@ -30,11 +30,12 @@ function NavButton({ item, isActive, onClick, mobile }) {
   );
 }
 
-export function MobileDrawer({ open, onClose, active, setActive, onLogout }) {
+export function MobileDrawer({ open, onClose, active, setActive, onLogout, profile }) {
   useEffect(() => {
     document.body.style.overflow = open ? "hidden" : "";
     return () => { document.body.style.overflow = ""; };
   }, [open]);
+  const navItems = getVisibleNavItems(profile);
 
   return (
     <>
@@ -64,7 +65,7 @@ export function MobileDrawer({ open, onClose, active, setActive, onLogout }) {
         </div>
         <div style={{ height: 1, background: "rgba(255,255,255,0.08)", marginBottom: 16, flexShrink: 0 }} />
         <nav className="sidebar-nav" style={{ display: "flex", flexDirection: "column", gap: 4, overflowY: "auto", flex: 1, paddingBottom: 8 }}>
-          {NAV_ITEMS.map((item) => (
+          {navItems.map((item) => (
             <NavButton
               key={item.key}
               item={item}
@@ -108,7 +109,8 @@ export function MobileDrawer({ open, onClose, active, setActive, onLogout }) {
   );
 }
 
-export function Sidebar({ active, setActive, onLogout }) {
+export function Sidebar({ active, setActive, onLogout, profile }) {
+  const navItems = getVisibleNavItems(profile);
   return (
     <div style={{
       width: 252,
@@ -130,7 +132,7 @@ export function Sidebar({ active, setActive, onLogout }) {
       </div>
 
       <nav className="sidebar-nav" style={{ display: "flex", flexDirection: "column", gap: 6, overflowY: "auto", minHeight: 0, flex: 1, justifyContent: "flex-start" }}>
-        {NAV_ITEMS.map((item) => (
+        {navItems.map((item) => (
           <NavButton
             key={item.key}
             item={item}

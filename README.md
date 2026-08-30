@@ -30,11 +30,15 @@ src/
       ConfigureSofiaSection.jsx — editor del prompt y base de conocimiento
       TestSofiaSection.jsx      — Probar a Sofía
       BirthdaySection.jsx       — Cumpleaños
+      ConfiguracionSection.jsx  — Configuración: solo admins. Crear usuarios,
+                                  decidir rol y qué módulos ve cada quien
     ui/                         — Card, Badge, Button, EmptyState, ErrorBanner,
                                   FilterSelect, Logo, MetricKpi, PasswordInput,
                                   PendingIntegrationCard, SectionHeader
   constants/colors.js           — paleta, escala tipográfica y animaciones
-  constants/nav.js              — items de navegación y estado de fuentes de datos
+  constants/nav.js              — items de navegación, DATA_SOURCES, y
+                                  getVisibleNavItems() (filtra el menú por
+                                  profiles.role/allowed_modules)
   constants/procedures.js       — taxonomía de procedimientos (nombres y familias)
   lib/supabase.js               — cliente de Supabase
 functions/api/                  — Cloudflare Pages Functions (corren en el server,
@@ -42,6 +46,11 @@ functions/api/                  — Cloudflare Pages Functions (corren en el ser
   meta-metrics.js               — proxy a Meta Ads (mes a la fecha, por campaña)
   daily-analysis.js             — genera el reporte de período con Claude
   conversion-stats.js           — proxy al Worker /stats/conversion (sin consumidor)
+  admin-users.js                — crear/editar usuarios (Configuración). A
+                                  diferencia de las demás, valida el JWT de
+                                  quien llama contra profiles.role = 'admin'
+                                  en vez del secreto compartido x-sofia-secret
+                                  — crea credenciales reales de acceso
   chat.js, audit-sofia.js, cleanup-scan.js, reindex.js, send-birthday.js
 supabase/schema.sql             — SQL base (NO incluye las migraciones recientes,
                                   ver supabase/migrations/README.md)
@@ -273,6 +282,32 @@ local, no un bug. Para probar el build de producción hay una config
 `cecmarketing-preview` en `.claude/launch.json`.
 
 ## Notas para sesiones futuras
+
+**2026-08-30 — Sección Configuración: usuarios, roles y módulos.**
+Nueva sección (solo visible para `role = 'admin'`) para crear usuarios del
+dashboard, decidir si son admin o no, y qué módulos del menú ven. Piezas:
+
+- **Migración** `profiles_admin_and_module_access`: agrega
+  `profiles.allowed_modules text[]` (`null` = todos los módulos — así los
+  usuarios que ya existían no perdieron acceso al aplicar esto), un check
+  constraint en `role` (`admin`/`user`), y policies de admin sobre `profiles`
+  vía el helper `current_user_is_admin()` (`SECURITY DEFINER`, `EXECUTE`
+  revocado a `anon`).
+- **`functions/api/admin-users.js`** crea/edita usuarios reales de Supabase
+  Auth (`service_role`, API de admin de GoTrue). A diferencia de las demás
+  funciones en `functions/api/`, protegidas con el secreto compartido
+  `x-sofia-secret`, esta valida el `access_token` de quien llama y exige
+  `profiles.role = 'admin'` antes de tocar nada — crear una cuenta no es lo
+  mismo que enviar un WhatsApp de prueba. Bloquea que el único admin se quite
+  a sí mismo el rol.
+- **`nav.js` → `getVisibleNavItems(profile)`** filtra el sidebar. Configurar
+  el menú por módulo vive en `NAV_ITEMS`; "Configuración" no es un módulo
+  asignable (vive aparte, solo para admins).
+- **No probado end-to-end** — `/api/*` no corre bajo `vite dev` (ver más
+  abajo), así que solo se verificó la UI (formulario, checklist de módulos,
+  el toggle admin/usuario deshabilitando el checklist) con un perfil admin
+  simulado en `App.jsx` y revertido después. Falta probar `admin-users.js`
+  contra el Worker real de Supabase Auth una vez desplegado.
 
 **2026-08-22 — Ojo: el Roadmap de arriba se había quedado desactualizado.**
 Una sesión anterior le dijo al usuario que Meta/Google (Fase 3) y el motor de
