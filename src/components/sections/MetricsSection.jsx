@@ -7,6 +7,7 @@ import { COLORS, SOURCE_COLORS } from "../../constants/colors.js";
 import { Card } from "../ui/Card.jsx";
 import { PendingIntegrationCard } from "../ui/PendingIntegrationCard.jsx";
 import { MetricKpi, SourceDot, tableStyles } from "../ui/MetricKpi.jsx";
+import { fetchApiAutenticado } from "../../lib/api.js";
 
 function getMetaInsight(campaigns, totals) {
   const withLeads = (campaigns ?? []).filter(c => {
@@ -38,14 +39,12 @@ export function MetricsSection() {
   const [metaError, setMetaError] = useState(null);
 
   useEffect(() => {
-    fetch("/api/meta-metrics")
-      .then(r => r.json())
-      .then(data => {
-        if (data.error) setMetaError(data.error);
-        else setMetaData(data);
-      })
-      .catch(err => setMetaError(err.message))
-      .finally(() => setMetaLoading(false));
+    let cancelled = false;
+    fetchApiAutenticado("/api/meta-metrics")
+      .then(data => { if (!cancelled) setMetaData(data); })
+      .catch(err => { if (!cancelled) setMetaError(err.message); })
+      .finally(() => { if (!cancelled) setMetaLoading(false); });
+    return () => { cancelled = true; };
   }, []);
 
   const metaCampaigns = (metaData?.campaigns ?? []).map(c => {
@@ -133,7 +132,7 @@ export function MetricsSection() {
             )}
 
             {/* KPIs */}
-            <div style={{ display: "grid", gridTemplateColumns: "repeat(5,1fr)", gap: 16, marginBottom: 20, marginTop: 20 }}>
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: 16, marginBottom: 16, marginTop: 20 }}>
               <MetricKpi
                 label="Gasto"
                 value={`$${parseFloat(metaData.totals.spend).toLocaleString("en-US", { minimumFractionDigits: 2 })}`}
@@ -142,17 +141,37 @@ export function MetricsSection() {
               <MetricKpi
                 label="Impresiones"
                 value={`${parseInt(metaData.totals.impressions).toLocaleString()}`}
-                sub="Alcance total"
+                sub="Veces que se mostró el anuncio"
+                note="No es alcance: una persona puede verlo varias veces"
+              />
+              {/* `clicks` incluye reacciones, comentarios y clics al perfil.
+                  Lo que la gente entiende por "clic" es el clic al enlace. */}
+              <MetricKpi
+                label="Clics al enlace"
+                value={`${parseInt(metaData.totals.linkClicks ?? 0).toLocaleString()}`}
+                sub={`De ${parseInt(metaData.totals.clicks).toLocaleString()} interacciones totales`}
+              />
+            </div>
+
+            {/* Dos definiciones distintas de "resultado", separadas a
+                propósito: casi todas las campañas del CEC son de mensajes,
+                y ahí la conversación iniciada es el resultado real. */}
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(4,1fr)", gap: 16, marginBottom: 20 }}>
+              <MetricKpi
+                label="Conversaciones iniciadas"
+                value={`${(metaData.totals.messagingStarted ?? 0).toLocaleString()}`}
+                sub="Anuncios de mensajes (7 días)"
               />
               <MetricKpi
-                label="Clics"
-                value={`${parseInt(metaData.totals.clicks).toLocaleString()}`}
-                sub="Al sitio web"
+                label="Costo por conversación"
+                value={metaData.totals.costoPorConversacion ? `$${metaData.totals.costoPorConversacion}` : "—"}
+                sub="Gasto entre conversaciones iniciadas"
               />
               <MetricKpi
                 label="Leads"
                 value={`${metaData.totals.leads}`}
-                sub="Contactos generados"
+                sub="Formulario / evento de lead"
+                note="Definición distinta a conversaciones"
               />
               <MetricKpi
                 label="Costo por lead"

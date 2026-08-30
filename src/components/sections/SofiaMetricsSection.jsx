@@ -94,7 +94,7 @@ async function fetchAllInRange(from, to) {
   for (;;) {
     const { data, error } = await supabase
       .from("sofia_conversations")
-      .select("id, sentiment, escalated, escalation_reason, created_at, procedure_code")
+      .select("id, sentiment, escalated, escalation_reason, created_at, procedure_code, message_count")
       .gte("created_at", `${from}T00:00:00-06:00`)
       .lte("created_at", `${to}T23:59:59-06:00`)
       .order("created_at", { ascending: true })
@@ -137,12 +137,20 @@ function formatDay(dayStr) {
 }
 
 function buildDailySeries(conversations, from, to) {
+  // Las claves de los baldes se generan sumando días a la fecha calendario,
+  // NO con toISOString(): esa devuelve la fecha UTC de una medianoche local,
+  // mientras que las conversaciones se agrupan con crDateStr() (fecha de
+  // Costa Rica). En un navegador al este de UTC las dos series quedaban
+  // corridas un día y el último día del rango salía siempre en cero.
   const byDay = new Map();
-  const start = new Date(`${from}T00:00:00`);
-  const end = new Date(`${to}T00:00:00`);
-  for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
-    const key = d.toISOString().slice(0, 10);
+  const [y0, m0, d0] = from.split("-").map(Number);
+  const cursor = new Date(Date.UTC(y0, m0 - 1, d0));
+  const endKey = to;
+  for (let i = 0; i < 400; i++) {
+    const key = cursor.toISOString().slice(0, 10);
     byDay.set(key, { day: key, name: formatDay(key), Conversaciones: 0, escaladas: 0 });
+    if (key >= endKey) break;
+    cursor.setUTCDate(cursor.getUTCDate() + 1);
   }
 
   conversations.forEach((conv) => {
@@ -323,7 +331,28 @@ export function SofiaMetricsSection({ setActive }) {
 
   const totalConversations = conversations.length;
   const escalatedCount = conversations.filter((c) => c.escalated).length;
-  const pctNoEscalado = totalConversations > 0 ? Math.round(((totalConversations - escalatedCount) / totalConversations) * 100) : 0;
+  // AUDITORÍA 2026-08-30 — acá había un KPI "Sin escalar / Resueltas sin
+  // asesor" que en agosto marcaba 74,7%. Era engañoso: el 51% de esas
+  // conversaciones "resueltas" tenían un solo mensaje, o sea gente que
+  // escribió una vez y nunca volvió. Eso es abandono, no resolución, y el
+  // número invitaba a concluir que Sofía resuelve 3 de cada 4 consultas.
+  //
+  // message_count arranca en 1 (no hay ceros), así que == 1 es exactamente
+  // "escribió una sola vez y no siguió". El desglose de abajo reparte el
+  // 100% en tres grupos excluyentes y no interpreta ninguno como éxito.
+  const sinEnganche = conversations.filter((c) => (c.message_count || 0) <= 1).length;
+  const atendidasPorSofia = conversations.filter(
+    (c) => (c.message_count || 0) > 1 && !c.escalated
+  ).length;
+  const pct = (n) => (totalConversations > 0 ? Math.round((n / totalConversations) * 100) : 0);
+  const desglose = [
+    { label: "Escalaron a un asesor", n: escalatedCount, color: COLORS.gold,
+      detail: "Sofía pasó la conversación a una persona" },
+    { label: "Atendidas por Sofía", n: atendidasPorSofia, color: COLORS.success,
+      detail: "Hubo intercambio y no hizo falta un asesor" },
+    { label: "Sin enganche", n: sinEnganche, color: COLORS.textMuted,
+      detail: "Escribieron una sola vez y no siguieron" },
+  ];
 
   const positiveOrNeutral = conversations.filter((c) => {
     const s = normalize(c.sentiment);
@@ -422,7 +451,12 @@ export function SofiaMetricsSection({ setActive }) {
               />
             </Card>
             <Card>
-              <MetricKpi label="Sin escalar" value={`${pctNoEscalado}%`} sub="Resueltas sin asesor" />
+              <MetricKpi
+                label="Sin enganche"
+                value={`${pct(sinEnganche)}%`}
+                sub="Escribieron una vez y no siguieron"
+                note="No son conversaciones resueltas"
+              />
             </Card>
             <Card>
               <MetricKpi label="Sentimiento" value={`${pctTonoOk}%`} sub="Neutral o positivo" />
@@ -435,6 +469,53 @@ export function SofiaMetricsSection({ setActive }) {
               />
             </Card>
           </div>
+
+          {/* Desglose honesto del resultado de cada conversación. Reemplaza
+              al KPI "Resueltas sin asesor", que contaba como éxito a quien
+              escribió una sola vez y nunca volvió. */}
+          <Card>
+            <h3 style={{ margin: "0 0 4px", fontSize: 18, fontFamily: "'Cormorant Garamond', serif", fontWeight: 600, color: COLORS.green }}>
+              En qué terminó cada conversación
+            </h3>
+            <p style={{ margin: "0 0 16px", fontSize: 13, color: COLORS.textMuted, fontFamily: "'Manrope', sans-serif" }}>
+              Los tres grupos son excluyentes y suman el total del rango.
+            </p>
+            {totalConversations === 0 ? (
+              <p style={{ margin: 0, fontSize: 13, color: COLORS.textMuted, fontFamily: "'Manrope', sans-serif" }}>
+                Sin conversaciones en este rango.
+              </p>
+            ) : (
+              <>
+                <div style={{ display: "flex", height: 10, borderRadius: 5, overflow: "hidden", marginBottom: 16 }}>
+                  {desglose.filter((d) => d.n > 0).map((d) => (
+                    <div key={d.label} style={{ width: `${(d.n / totalConversations) * 100}%`, background: d.color }} />
+                  ))}
+                </div>
+                <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+                  {desglose.map((d) => (
+                    <div key={d.label} style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", gap: 12 }}>
+                      <span style={{ display: "flex", alignItems: "center", gap: 8, minWidth: 0 }}>
+                        <span style={{ width: 8, height: 8, borderRadius: "50%", background: d.color, flexShrink: 0 }} />
+                        <span style={{ fontSize: 13, fontFamily: "'Manrope', sans-serif" }}>
+                          <strong style={{ color: COLORS.text }}>{d.label}</strong>
+                          <span style={{ color: COLORS.textMuted }}> — {d.detail}</span>
+                        </span>
+                      </span>
+                      <span style={{ fontSize: 13, fontWeight: 700, color: COLORS.green, fontFamily: "'Manrope', sans-serif", whiteSpace: "nowrap", fontVariantNumeric: "tabular-nums" }}>
+                        {d.n} · {pct(d.n)}%
+                      </span>
+                    </div>
+                  ))}
+                </div>
+                <p style={{ margin: "14px 0 0", fontSize: 11.5, lineHeight: 1.5, color: COLORS.textMuted, fontFamily: "'Manrope', sans-serif" }}>
+                  <strong>"Atendidas por Sofía" no quiere decir que el paciente haya agendado.</strong> Hoy
+                  no se registra el resultado comercial de la conversación
+                  (<code>derived_to_appointment</code> está en cero en toda la base), así que ninguna
+                  de estas cifras mide conversión.
+                </p>
+              </>
+            )}
+          </Card>
 
           <Card>
             <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", gap: 12, flexWrap: "wrap", marginBottom: 4 }}>

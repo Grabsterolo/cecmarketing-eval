@@ -8,6 +8,7 @@ import { MetricKpi } from "../ui/MetricKpi.jsx";
 import { PROCEDURE_FAMILIES } from "../../constants/procedures.js";
 import { useIsMobile } from "../../hooks/useIsMobile.js";
 import { supabase } from "../../lib/supabase.js";
+import { fetchApiAutenticado } from "../../lib/api.js";
 
 // created_at se guarda en UTC pero el equipo opera en hora de Costa Rica
 // (UTC-6) — mismo patrón que el resto de las secciones. Sin esto, "este mes"
@@ -72,9 +73,7 @@ export function DashboardHome({ profile }) {
     // Meta y Sofía se piden en paralelo y se guardan por separado a
     // propósito: si Meta falla, las cifras de Sofía siguen siendo válidas y
     // se muestran igual. Un fallo nunca puede terminar pintando 0.
-    const metaPromise = fetch("/api/meta-metrics")
-      .then((r) => r.json())
-      .then((d) => (d.error ? Promise.reject(new Error(d.error)) : d));
+    const metaPromise = fetchApiAutenticado("/api/meta-metrics");
 
     // Una sola llamada en vez de 11 conteos por separado. En Postgres cada
     // conteo tarda 2-4 ms, pero eran 11 peticiones HTTP concurrentes: el
@@ -139,10 +138,18 @@ export function DashboardHome({ profile }) {
   const sinTema = campanas.filter((c) => !c.tema && c.gasto > 0);
   const gastoSinTema = sinTema.reduce((s, c) => s + c.gasto, 0);
 
+  // El centro del donut muestra sofia.total, así que los segmentos tienen que
+  // sumar exactamente eso. Las conversaciones que Claude no logró clasificar
+  // se muestran como "Sin clasificar" en vez de desaparecer del gráfico
+  // dejando que las partes no cuadren con el total.
+  const sinClasificar = sofia
+    ? Math.max(0, sofia.total - sofia.positivo - sofia.neutral - sofia.negativo)
+    : 0;
   const sentimentData = sofia ? [
     { name: "Positivo", value: sofia.positivo, color: COLORS.success },
     { name: "Neutral", value: sofia.neutral, color: COLORS.gold },
     { name: "Negativo", value: sofia.negativo, color: COLORS.danger },
+    { name: "Sin clasificar", value: sinClasificar, color: COLORS.border },
   ].filter((d) => d.value > 0) : [];
 
   const mesLabel = new Date().toLocaleDateString("es-CR", { month: "long", timeZone: "America/Costa_Rica" });
@@ -257,8 +264,11 @@ export function DashboardHome({ profile }) {
                 </tr>
               </thead>
               <tbody>
-                {conTema.map((c) => (
-                  <tr key={c.nombre}>
+                {conTema.map((c, i) => (
+                  // La clave incluye el índice: la cuenta tiene dos campañas
+                  // distintas con el mismo nombre ("MIA | Mensajes"), y con
+                  // key={c.nombre} React colapsaba/confundía ambas filas.
+                  <tr key={`${c.nombre}-${i}`}>
                     <td style={{ padding: "10px 12px 10px 0", borderBottom: `1px solid ${COLORS.border}`, color: COLORS.text }}>
                       {c.nombre}
                     </td>
@@ -354,10 +364,16 @@ export function DashboardHome({ profile }) {
                 value={meta?.totals?.leads > 0 ? money(meta.totals.spend / meta.totals.leads) : "—"}
                 sub={meta?.totals?.leads > 0 ? "Promedio de todas las campañas" : "Sin leads registrados este mes"}
               />
+              {/* Divide dos cosas que NO son la misma población: a Sofía le
+                  llegan también conversaciones orgánicas, de Facebook y de
+                  anuncios de TikTok (canal sin inversión registrada acá), así
+                  que este número subestima el costo real por conversación
+                  pagada. Se deja porque sirve de referencia, pero avisando. */}
               <MetricKpi
                 label="Costo por conversación"
                 value={sofia?.total > 0 ? money((meta?.totals?.spend || 0) / sofia.total) : "—"}
-                sub="Inversión Meta entre las conversaciones de Sofía"
+                sub="Inversión Meta entre TODAS las conversaciones de Sofía"
+                note="Incluye conversaciones orgánicas y de otros canales: es un piso, no el costo real"
               />
             </div>
           )}
