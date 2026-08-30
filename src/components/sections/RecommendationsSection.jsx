@@ -127,6 +127,15 @@ function MetaVsSofiaSnapshot({ snapshot }) {
   );
 }
 
+// Días transcurridos desde el último día que cubre el análisis, en fecha de
+// Costa Rica (rec.date es un DATE, sin hora).
+function diasDeAntiguedad(rec) {
+  if (!rec?.date) return 0;
+  const hoyCR = new Date().toLocaleDateString("en-CA", { timeZone: "America/Costa_Rica" });
+  const ms = Date.parse(`${hoyCR}T00:00:00Z`) - Date.parse(`${rec.date}T00:00:00Z`);
+  return Math.max(0, Math.round(ms / 86400000));
+}
+
 export function RecommendationsSection() {
   const [recommendations, setRecommendations] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -198,9 +207,29 @@ export function RecommendationsSection() {
         </p>
       )}
 
-      {/* Análisis de hoy */}
+      {/* Análisis más reciente */}
       {!loading && today && (
         <>
+          {/* El análisis más reciente se mostraba sin decir de cuándo es: la
+              variable se llama `today` pero es simplemente la fila con la
+              fecha más alta, que puede tener días. El 2026-08-30 el reporte
+              visible era del 26 de agosto y nada en pantalla lo advertía —
+              se leía como el estado de hoy. El reporte lo genera un
+              disparador de Cloudflare; si deja de correr, esta pantalla
+              seguiría mostrando el último indefinidamente. */}
+          {diasDeAntiguedad(today) > (today.period_days || 1) + 1 && (
+            <div style={{
+              margin: "0 0 16px", fontSize: 12.5, lineHeight: 1.55,
+              color: COLORS.warning, background: COLORS.warningBg,
+              border: `1px solid ${COLORS.warningBorder}`,
+              borderRadius: 8, padding: "10px 12px", fontFamily: "'Manrope', sans-serif",
+            }}>
+              Este análisis es el más reciente que hay, pero cubre hasta el{" "}
+              <strong>{formatPeriod(today)}</strong> — hace {diasDeAntiguedad(today)} días.
+              No describe lo que está pasando hoy. Si el reporte automático debería
+              correr más seguido, hay que revisar el disparador en Cloudflare.
+            </div>
+          )}
           <MetaVsSofiaSnapshot snapshot={today.data_snapshot} />
           <Card style={{ marginBottom: 24 }}>
             <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 16 }}>

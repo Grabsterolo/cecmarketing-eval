@@ -69,9 +69,9 @@ function engagementScore(messageCount) {
   return 0;
 }
 
-function recencyScore(createdAt) {
-  if (!createdAt) return 3;
-  const hoursAgo = (Date.now() - new Date(createdAt).getTime()) / 36e5;
+function recencyScore(fecha) {
+  if (!fecha) return 3;
+  const hoursAgo = (Date.now() - new Date(fecha).getTime()) / 36e5;
   if (hoursAgo < 6) return 20;
   if (hoursAgo < 24) return 14;
   if (hoursAgo < 72) return 8;
@@ -83,12 +83,22 @@ function recencyScore(createdAt) {
 // basada solo en datos que ya existen en sofia_conversations — no incluye
 // tiempo de respuesta del asesor humano porque ese timestamp todavía no se
 // registra en ningún lado (ver Worker cec-sofia-whatsapp, proyecto aparte).
+// created_at es el PRIMER contacto y nunca cambia: el Worker actualiza
+// siempre la fila original del mismo phone_hash en vez de crear una nueva.
+// La última actividad real es updated_at (trigger, 2026-08-27). Usar
+// created_at acá hacía que un lead que escribió hoy se mostrara como "hace
+// 5d" y perdiera hasta 17 de los 20 puntos de recencia — el mismo error que
+// ya se había corregido en la sección Pacientes.
+function ultimaActividad(conv) {
+  return conv.updated_at || conv.created_at;
+}
+
 function computeScore(conv) {
   return (
     procedureScore(conv.procedure_interest) +
     sentimentScore(conv.sentiment) +
     engagementScore(conv.message_count) +
-    recencyScore(conv.created_at)
+    recencyScore(ultimaActividad(conv))
   );
 }
 
@@ -151,10 +161,10 @@ function engagementCriterion(messageCount) {
   return { tier: "bajo", detail: `${n} mensaje${n === 1 ? "" : "s"} — poco intercambio` };
 }
 
-function recencyCriterion(createdAt) {
-  const rel = formatRelative(createdAt) || "sin fecha";
-  if (!createdAt) return { tier: "bajo", detail: rel };
-  const hoursAgo = (Date.now() - new Date(createdAt).getTime()) / 36e5;
+function recencyCriterion(fecha) {
+  const rel = formatRelative(fecha) || "sin fecha";
+  if (!fecha) return { tier: "bajo", detail: rel };
+  const hoursAgo = (Date.now() - new Date(fecha).getTime()) / 36e5;
   if (hoursAgo < 6) return { tier: "alto", detail: rel };
   if (hoursAgo < 24) return { tier: "medio", detail: rel };
   return { tier: "bajo", detail: rel };
@@ -165,7 +175,7 @@ function scoreCriteria(conv) {
     { label: "Procedimiento", ...procedureCriterion(conv.procedure_interest) },
     { label: "Sentimiento", ...sentimentCriterion(conv.sentiment) },
     { label: "Interacción", ...engagementCriterion(conv.message_count) },
-    { label: "Última actividad", ...recencyCriterion(conv.created_at) },
+    { label: "Última actividad", ...recencyCriterion(ultimaActividad(conv)) },
   ];
 }
 
@@ -388,7 +398,7 @@ function LeadRow({ conv }) {
               </Badge>
             )}
             <span style={{ fontSize: 12, color: COLORS.textMuted, fontFamily: "'Manrope', sans-serif" }}>
-              {formatRelative(conv.created_at)}
+              {formatRelative(ultimaActividad(conv))}
             </span>
           </div>
 
@@ -433,7 +443,8 @@ function LeadRow({ conv }) {
             <MetaField label="Mensajes" value={conv.message_count || 0} />
             <MetaField label="Canal" value={conv.channel || "whatsapp"} />
             <MetaField label="Teléfono" value={conv.phone_number || "sin número"} />
-            <MetaField label="Recibido" value={formatFullDate(conv.created_at)} />
+            <MetaField label="Primer contacto" value={formatFullDate(conv.created_at)} />
+            <MetaField label="Última actividad" value={formatFullDate(ultimaActividad(conv))} />
           </div>
         </div>
       )}
@@ -499,7 +510,7 @@ export function LeadsCalientesSection() {
       const [{ data, error: dataError }, { count, error: countError }] = await Promise.all([
         applyServerFilters(
           supabase.from("sofia_conversations").select(
-            "id, phone_number, procedure_interest, sentiment, message_count, escalated, escalation_reason, created_at, channel, prospect_id"
+            "id, phone_number, procedure_interest, sentiment, message_count, escalated, escalation_reason, created_at, updated_at, channel, prospect_id"
           ),
           filters
         )
@@ -538,8 +549,31 @@ export function LeadsCalientesSection() {
     <div>
       <SectionHeader
         icon={<Flame size={20} color={COLORS.gold} />}
-        subtitle="Conversaciones de Sofía con más potencial de venta, ordenadas por score — a quién contactar primero."
+        subtitle="Conversaciones de Sofía con más potencial de venta. La lista trae primero las más recientes y las ordena por score dentro de cada página."
       />
+
+      {/* El score se calcula en el navegador sobre las 20 filas ya traídas,
+          y la consulta a Supabase ordena por created_at, no por score. O sea:
+          esta pantalla ordena por score DENTRO de la página, no en toda la
+          base. Un lead de score alto de hace tres semanas está en una página
+          del fondo y un asesor nunca lo va a ver. Estaba documentado solo en
+          un comentario del código; acá se dice en pantalla, porque quien
+          contacta leads necesita saber que "Alto" no significa "los más
+          altos de toda la base". La solución de fondo es mover el score a
+          Postgres (como ya hace la vista sofia_followup_queue en Seguimiento)
+          — ver el informe de auditoría del 2026-08-30. */}
+      <div style={{
+        margin: "0 0 16px", fontSize: 12.5, lineHeight: 1.55,
+        color: COLORS.warning, background: COLORS.warningBg,
+        border: `1px solid ${COLORS.warningBorder}`,
+        borderRadius: 8, padding: "10px 12px", fontFamily: "'Manrope', sans-serif",
+      }}>
+        El orden por score aplica <strong>dentro de cada página</strong>, no sobre toda la base:
+        la consulta trae las conversaciones más recientes primero. Un lead con score alto de
+        hace varias semanas puede estar en una página del final.{" "}
+        <strong>Para trabajar la cola priorizada completa, usá Seguimiento</strong>, que sí ordena
+        por score en el servidor.
+      </div>
 
       <FilterBar
         escalatedOnly={escalatedOnly} setEscalatedOnly={updateEscalatedOnly}
