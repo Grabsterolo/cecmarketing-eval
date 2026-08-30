@@ -1,0 +1,514 @@
+<title>Auditoría del Dashboard CEC</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@500;600;700&family=Manrope:wght@400;500;600;700;800&display=swap">
+<style>
+:root{
+  --verde:#1F4A40; --verde-claro:#2F6B5C; --dorado:#C9A24E; --dorado-suave:#F3E7CC;
+  --ground:#FAFAF8; --panel:#FFFFFF; --panel-alt:#F3F5F2;
+  --texto:#1B2420; --muted:#5F6F69; --borde:#E2E6E1; --borde-fuerte:#CBD3CE;
+  --crit:#9B2C2C; --crit-bg:#FBEBEB; --crit-bd:#EFC9C9;
+  --warn:#A45B00; --warn-bg:#FDF3E2; --warn-bd:#EFD8AE;
+  --ok:#2F6B4F; --ok-bg:#E9F3ED; --ok-bd:#C3DCCD;
+  --info:#3C5A79; --info-bg:#EAF0F6; --info-bd:#C7D6E4;
+  --serif:'Cormorant Garamond',Georgia,serif;
+  --sans:'Manrope',-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;
+}
+@media (prefers-color-scheme:dark){
+  :root:not([data-theme="light"]){
+    --ground:#0E1512; --panel:#152019; --panel-alt:#1B2721;
+    --texto:#E8EDE9; --muted:#9BAAA3; --borde:#26332C; --borde-fuerte:#35443C;
+    --verde:#7FB8A4; --verde-claro:#A5CFC0; --dorado:#D9B76A; --dorado-suave:#3A3121;
+    --crit:#F0918D; --crit-bg:#2E1817; --crit-bd:#4D2523;
+    --warn:#E0AE63; --warn-bg:#2C2114; --warn-bd:#4A3820;
+    --ok:#7FC79E; --ok-bg:#152619; --ok-bd:#27442F;
+    --info:#9BBBD9; --info-bg:#16202B; --info-bd:#2A3B4D;
+  }
+}
+:root[data-theme="dark"]{
+  --ground:#0E1512; --panel:#152019; --panel-alt:#1B2721;
+  --texto:#E8EDE9; --muted:#9BAAA3; --borde:#26332C; --borde-fuerte:#35443C;
+  --verde:#7FB8A4; --verde-claro:#A5CFC0; --dorado:#D9B76A; --dorado-suave:#3A3121;
+  --crit:#F0918D; --crit-bg:#2E1817; --crit-bd:#4D2523;
+  --warn:#E0AE63; --warn-bg:#2C2114; --warn-bd:#4A3820;
+  --ok:#7FC79E; --ok-bg:#152619; --ok-bd:#27442F;
+  --info:#9BBBD9; --info-bg:#16202B; --info-bd:#2A3B4D;
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--ground);color:var(--texto);font-family:var(--sans);font-size:15.5px;line-height:1.65;-webkit-font-smoothing:antialiased}
+.wrap{max-width:920px;margin:0 auto;padding:56px 28px 100px}
+h1,h2,h3{text-wrap:balance;margin:0}
+.eyebrow{font-size:11px;letter-spacing:.22em;text-transform:uppercase;font-weight:700;color:var(--dorado);margin:0 0 10px}
+h1{font-family:var(--serif);font-size:clamp(38px,6vw,58px);font-weight:600;line-height:1.05;color:var(--verde);letter-spacing:-.01em}
+.sub{color:var(--muted);font-size:16px;margin:14px 0 0;max-width:60ch}
+.rule{height:1px;background:var(--borde);border:0;margin:44px 0}
+section{margin:0 0 12px;scroll-margin-top:20px}
+h2{font-family:var(--serif);font-size:31px;font-weight:600;color:var(--verde);margin:52px 0 6px;display:flex;align-items:baseline;gap:12px}
+h2 .ltr{font-family:var(--sans);font-size:11px;font-weight:800;letter-spacing:.16em;color:var(--dorado);border:1px solid var(--borde-fuerte);border-radius:5px;padding:3px 7px;flex:none;transform:translateY(-4px)}
+h3{font-family:var(--sans);font-size:15px;font-weight:800;color:var(--texto);margin:30px 0 8px;letter-spacing:-.005em}
+p{margin:12px 0;max-width:68ch}
+ul,ol{margin:12px 0;padding-left:22px;max-width:68ch}
+li{margin:7px 0}
+code{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:.86em;background:var(--panel-alt);border:1px solid var(--borde);border-radius:4px;padding:1px 5px}
+strong{font-weight:700}
+a{color:var(--verde);text-decoration-color:var(--borde-fuerte);text-underline-offset:3px}
+a:focus-visible,button:focus-visible{outline:2px solid var(--dorado);outline-offset:2px;border-radius:3px}
+
+/* Scorecard */
+.score{display:grid;grid-template-columns:auto 1fr;gap:30px;align-items:center;background:var(--panel);border:1px solid var(--borde);border-radius:14px;padding:26px 28px;margin:32px 0 0}
+.dial{width:132px;height:132px;flex:none;position:relative}
+.dial svg{transform:rotate(-90deg)}
+.dial .val{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;line-height:1}
+.dial .n{font-size:36px;font-weight:800;color:var(--verde);font-variant-numeric:tabular-nums}
+.dial .d{font-size:10.5px;letter-spacing:.14em;text-transform:uppercase;color:var(--muted);font-weight:700;margin-top:5px}
+.deltas{display:flex;flex-wrap:wrap;gap:10px;margin:14px 0 0}
+.pill{font-size:12px;font-weight:700;padding:4px 11px;border-radius:999px;border:1px solid;font-variant-numeric:tabular-nums}
+.p-crit{color:var(--crit);background:var(--crit-bg);border-color:var(--crit-bd)}
+.p-warn{color:var(--warn);background:var(--warn-bg);border-color:var(--warn-bd)}
+.p-ok{color:var(--ok);background:var(--ok-bg);border-color:var(--ok-bd)}
+.p-info{color:var(--info);background:var(--info-bg);border-color:var(--info-bd)}
+
+/* Findings */
+.find{border:1px solid var(--borde);border-left:3px solid var(--borde-fuerte);border-radius:10px;background:var(--panel);padding:18px 20px;margin:14px 0}
+.find.c1{border-left-color:var(--crit)}
+.find.c2{border-left-color:var(--warn)}
+.find.c3{border-left-color:var(--info)}
+.find h4{margin:0 0 4px;font-size:15.5px;font-weight:800;display:flex;gap:10px;align-items:baseline;flex-wrap:wrap}
+.tag{font-size:10px;font-weight:800;letter-spacing:.1em;text-transform:uppercase;padding:2px 7px;border-radius:4px;border:1px solid;flex:none}
+.t-crit{color:var(--crit);background:var(--crit-bg);border-color:var(--crit-bd)}
+.t-warn{color:var(--warn);background:var(--warn-bg);border-color:var(--warn-bd)}
+.t-info{color:var(--info);background:var(--info-bg);border-color:var(--info-bd)}
+.t-ok{color:var(--ok);background:var(--ok-bg);border-color:var(--ok-bd)}
+.find p{margin:8px 0 0;font-size:14px;max-width:none}
+.find .ev{margin-top:10px;font-size:13px;color:var(--muted);border-top:1px dashed var(--borde);padding-top:9px}
+
+/* Tables */
+.tw{overflow-x:auto;margin:18px 0;border:1px solid var(--borde);border-radius:10px;background:var(--panel)}
+table{border-collapse:collapse;width:100%;min-width:640px;font-size:13.5px}
+th{text-align:left;font-size:10.5px;letter-spacing:.1em;text-transform:uppercase;color:var(--muted);font-weight:800;padding:12px 14px;border-bottom:1px solid var(--borde-fuerte);white-space:nowrap;background:var(--panel-alt)}
+td{padding:11px 14px;border-bottom:1px solid var(--borde);vertical-align:top}
+tbody tr:last-child td{border-bottom:0}
+td.num{text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}
+.lvl{font-weight:800;white-space:nowrap;font-size:12.5px}
+.l-verde{color:var(--ok)} .l-amar{color:var(--warn)} .l-nar{color:#C2620E} .l-rojo{color:var(--crit)} .l-negro{color:var(--muted)}
+
+/* Funnel */
+.funnel{display:flex;flex-direction:column;gap:7px;margin:20px 0}
+.fstep{display:grid;grid-template-columns:1fr auto;gap:14px;align-items:center;padding:12px 16px;border-radius:8px;border:1px solid var(--borde);background:var(--panel)}
+.fstep.ko{background:var(--crit-bg);border-color:var(--crit-bd)}
+.fstep.mid{background:var(--warn-bg);border-color:var(--warn-bd)}
+.fstep .lbl{font-weight:700;font-size:14px}
+.fstep .st{font-size:12px;color:var(--muted);margin-top:2px}
+.fstep .v{font-variant-numeric:tabular-nums;font-weight:800;font-size:15px;white-space:nowrap}
+.cut{display:flex;align-items:center;gap:10px;color:var(--crit);font-size:12px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;margin:4px 0}
+.cut::before,.cut::after{content:"";flex:1;border-top:2px dashed var(--crit-bd)}
+
+/* Roadmap */
+.phase{border:1px solid var(--borde);border-radius:10px;background:var(--panel);padding:18px 20px;margin:14px 0}
+.phase .when{font-size:10.5px;letter-spacing:.16em;text-transform:uppercase;font-weight:800;color:var(--dorado);margin:0 0 8px}
+.phase ol{margin:0;padding-left:20px}
+
+.note{background:var(--panel-alt);border:1px solid var(--borde);border-radius:10px;padding:16px 20px;margin:20px 0;font-size:14px}
+.note p{max-width:none}
+@media (max-width:640px){
+  .wrap{padding:36px 18px 70px}
+  .score{grid-template-columns:1fr;gap:20px;justify-items:center;text-align:center}
+  h2{font-size:26px}
+}
+@media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
+</style>
+
+<div class="wrap">
+
+<p class="eyebrow">Auditoría interna · 30 de agosto de 2026</p>
+<h1>Auditoría del Dashboard CEC</h1>
+<p class="sub">Marketing, Sofía IA y Call Center. Cada métrica rastreada hasta su origen y verificada contra la base de producción y la API de Meta — no contra la documentación del repositorio.</p>
+
+<section id="a">
+<h2><span class="ltr">A</span> Resumen ejecutivo</h2>
+
+<div class="score">
+  <div class="dial">
+    <svg width="132" height="132" viewBox="0 0 132 132" aria-hidden="true">
+      <circle cx="66" cy="66" r="57" fill="none" stroke="var(--borde)" stroke-width="13"/>
+      <circle cx="66" cy="66" r="57" fill="none" stroke="var(--dorado)" stroke-width="13" stroke-linecap="round"
+              stroke-dasharray="358" stroke-dashoffset="187"/>
+    </svg>
+    <div class="val"><span class="n">52</span><span class="d">antes</span></div>
+  </div>
+  <div>
+    <h3 style="margin-top:0">Confiabilidad: <strong>52/100</strong> al iniciar, <strong>71/100</strong> tras los arreglos de hoy</h3>
+    <p style="font-size:14.5px;margin-top:6px">La buena noticia primero: <strong>no encontré ni un solo dato inventado, mock ni hardcodeado en producción.</strong> Todo lo que se muestra sale de Meta o de las 9.984 conversaciones reales de Sofía. La tubería de datos es genuina y está sana.</p>
+    <p style="font-size:14.5px">El problema no es que los datos sean falsos, sino que <strong>varias cifras no medían lo que su etiqueta decía.</strong> Cuatro de ellas podían llevar a decisiones equivocadas, y una — la más visible de Sofía — estaba tres veces inflada respecto de lo que un director interpretaría al leerla.</p>
+    <div class="deltas">
+      <span class="pill p-crit">3 críticos</span>
+      <span class="pill p-warn">6 altos</span>
+      <span class="pill p-info">7 medios</span>
+      <span class="pill p-ok">11 corregidos hoy</span>
+    </div>
+  </div>
+</div>
+
+<h3>Por qué 52 y no más</h3>
+<p>El techo no lo pone el código: lo pone la <strong>ausencia de la mitad inferior del embudo</strong>. Hoy el sistema puede decir con precisión cuánto se invirtió y cuánta gente conversó. No puede decir cuántos agendaron, cuántos asistieron ni cuánto facturaron — y ese es exactamente el tramo donde se decide el presupuesto.</p>
+<p>El 71 posterior refleja que las cifras que ahora aparecen en pantalla son fieles. Pasar de 71 requiere decisiones de negocio y de integración, no más programación en este repositorio.</p>
+</section>
+
+<hr class="rule">
+
+<section id="b">
+<h2><span class="ltr">B</span> Problemas críticos</h2>
+<p>Los que pueden provocar una decisión incorrecta o exponen el negocio. Ordenados por gravedad.</p>
+
+<div class="find c1">
+  <h4><span class="tag t-crit">Crítico</span> El endpoint de Meta estaba abierto a internet</h4>
+  <p><code>/api/meta-metrics</code> no verificaba absolutamente nada. Durante esta auditoría descargué el gasto publicitario completo del CEC — 15 campañas, $8.493,96 del mes, rendimiento por campaña — con un <code>curl</code> sin credenciales desde fuera de la red.</p>
+  <p class="ev"><strong>Riesgo:</strong> cualquier competidor con la URL veía la estructura y el presupuesto de campañas. <strong>Estado: corregido</strong> — ahora exige el token de sesión de Supabase.</p>
+</div>
+
+<div class="find c1">
+  <h4><span class="tag t-crit">Crítico</span> El secreto que protege los endpoints viaja en el JavaScript público</h4>
+  <p>Seis funciones (<code>chat</code>, <code>send-birthday</code>, <code>reindex</code>, <code>daily-analysis</code>, <code>audit-sofia</code>, <code>cleanup-scan</code>) se protegen con <code>x-sofia-secret</code>. Ese valor se define como <code>VITE_SOFIA_SECRET</code>, y <strong>toda variable <code>VITE_*</code> se compila dentro del bundle que sirve el navegador.</strong> Lo verifiqué: descargué el archivo de producción y el secreto está ahí como texto literal, sin login de por medio.</p>
+  <p class="ev"><strong>Riesgo:</strong> cualquiera puede disparar envíos reales de WhatsApp a números arbitrarios, reescribir los embeddings de la base de conocimiento de Sofía, y consumir las cuentas de Anthropic y OpenAI del CEC. <strong>No corregido</strong> — requiere mover estas llamadas al patrón de token de sesión y rotar el secreto. Ver sección L.</p>
+</div>
+
+<div class="find c1">
+  <h4><span class="tag t-crit">Crítico</span> «Sofía resuelve el 74,7%» era una lectura falsa</h4>
+  <p>Métricas Sofía mostraba <em>«Sin escalar — 74,7% resueltas sin asesor»</em>. Pero <strong>el 51,2% de esas conversaciones "resueltas" tenían un solo mensaje</strong>: personas que escribieron una vez y nunca volvieron. Eso es abandono, no resolución.</p>
+  <p class="ev"><strong>Riesgo:</strong> invitaba a concluir que Sofía atiende bien 3 de cada 4 consultas cuando la cifra defendible es <strong>34,4%</strong>. Es la clase de número que sostiene la decisión de no contratar más asesores. <strong>Estado: corregido</strong> — reemplazado por un desglose de tres grupos excluyentes.</p>
+</div>
+
+<div class="find c2">
+  <h4><span class="tag t-warn">Alto</span> Los permisos por módulo son solo cosméticos</h4>
+  <p><code>allowed_modules</code> filtra el menú <strong>en el navegador</strong>. Las políticas RLS de la base no distinguen usuarios: <code>sofia_config</code> tiene una policy <code>ALL</code> para cualquier autenticado. Un usuario al que se le quitó «Configurar a Sofía» puede reescribir el prompt de la IA que habla con pacientes reales llamando a la API directamente.</p>
+  <p class="ev">Lo mismo aplica a los 4.181 teléfonos de pacientes: cualquier cuenta los lee, tenga o no el módulo Pacientes. <strong>No corregido</strong>: restringir la escritura a admins cambiaría quién puede editar a Sofía hoy — es una decisión suya, no mía.</p>
+</div>
+
+<div class="find c2">
+  <h4><span class="tag t-warn">Alto</span> «Clics al sitio web» estaba 2,6 veces inflado</h4>
+  <p>Mostraba <code>clicks</code> de Meta (95.852) etiquetado como clics al sitio. Ese campo incluye reacciones, comentarios y clics al perfil. Los clics reales al enlace eran <strong>36.687</strong>.</p>
+  <p class="ev">Y el «Alcance» se calculaba <strong>sumando <code>reach</code> entre campañas</strong> — una métrica que Meta ya deduplica por campaña, así que sumarla cuenta dos veces a quien vio dos anuncios. <strong>Ambos corregidos.</strong></p>
+</div>
+
+<div class="find c2">
+  <h4><span class="tag t-warn">Alto</span> «Leads Potenciales» ordenaba por score solo dentro de la página visible</h4>
+  <p>La sección promete leads «ordenados por score». En realidad la consulta pide las 20 conversaciones <strong>más recientes</strong> y ordena por score únicamente esas 20. El lead de score más alto de hace tres semanas está en una página del fondo y ningún asesor lo va a ver. El filtro «Score: Alto» muestra los altos <em>de esa página</em>, no de la base.</p>
+  <p class="ev">Además convive con una <strong>segunda fórmula de score distinta</strong> en la vista <code>sofia_followup_queue</code> que usa Seguimiento: el mismo paciente puntúa diferente en dos pantallas. <strong>Aviso agregado en pantalla</strong>; unificar las fórmulas requiere decidir cuál manda.</p>
+</div>
+</section>
+
+<hr class="rule">
+
+<section id="c">
+<h2><span class="ltr">C</span> Auditoría de métricas</h2>
+<p>Matriz completa en <code>docs/DATA_AUDIT.md</code> dentro del repositorio, para que se mantenga junto al código. Resumen de los niveles asignados:</p>
+
+<div class="tw">
+<table>
+<thead><tr><th>Métrica</th><th>Fuente</th><th>Nivel</th><th>Observación</th></tr></thead>
+<tbody>
+<tr><td>Gasto Meta</td><td>API <code>spend</code></td><td class="lvl l-verde">🟢 Confirmada</td><td>$8.493,96 en agosto, verificado contra la API</td></tr>
+<tr><td>Impresiones</td><td>API <code>impressions</code></td><td class="lvl l-verde">🟢 Confirmada</td><td>Se rotulaba «Alcance total» — corregido</td></tr>
+<tr><td>Alcance</td><td>API <code>reach</code></td><td class="lvl l-rojo">🔴 Incorrecta</td><td>Se sumaba entre campañas; ya no se publica</td></tr>
+<tr><td>Clics al sitio</td><td>API <code>clicks</code></td><td class="lvl l-rojo">🔴 Incorrecta</td><td>2,6× inflado; ahora <code>inline_link_clicks</code></td></tr>
+<tr><td>Leads Meta</td><td>API <code>actions[lead]</code></td><td class="lvl l-amar">🟡 Parcial</td><td>4.824 — no es lo mismo que las 6.963 conversaciones iniciadas</td></tr>
+<tr><td>CPL</td><td>Derivada</td><td class="lvl l-amar">🟡 Parcial</td><td>Mezcla campañas de alcance con las de mensajes</td></tr>
+<tr><td>Totales del mes</td><td>Suma de campañas</td><td class="lvl l-amar">🟡 Parcial</td><td>Sin paginación: se rompía en silencio pasando 25 campañas — corregido</td></tr>
+<tr><td>Conversaciones Sofía</td><td><code>sofia_conversations</code></td><td class="lvl l-verde">🟢 Confirmada</td><td>8.610 en agosto; cuenta nuevas, no actividad</td></tr>
+<tr><td>«Resueltas sin asesor»</td><td>Derivada</td><td class="lvl l-rojo">🔴 Incorrecta</td><td>74,7% engañoso — eliminada y reemplazada</td></tr>
+<tr><td>Escalación</td><td><code>escalated</code></td><td class="lvl l-verde">🟢 Confirmada</td><td>25,3% en agosto</td></tr>
+<tr><td>Sentimiento</td><td><code>sentiment</code></td><td class="lvl l-verde">🟢 Confirmada</td><td>16 sin clasificar ya no desaparecen del gráfico</td></tr>
+<tr><td>Temas consultados</td><td><code>procedure_code</code></td><td class="lvl l-verde">🟢 Confirmada</td><td>97,1% de cobertura</td></tr>
+<tr><td>Duración de conversación</td><td><code>duration_minutes</code></td><td class="lvl l-negro">⚫ Sin fuente</td><td><strong>0 en las 8.610 filas de agosto</strong> — nadie la escribe</td></tr>
+<tr><td>Conversión a cita</td><td><code>derived_to_appointment</code></td><td class="lvl l-negro">⚫ Sin fuente</td><td><strong>0 en toda la base</strong></td></tr>
+<tr><td>Contactados / Agendados</td><td><code>sofia_followup_status</code></td><td class="lvl l-negro">⚫ Sin fuente</td><td>5 filas en total, <strong>0 contactados, 0 agendados</strong></td></tr>
+<tr><td>Última actividad (Leads)</td><td><code>created_at</code></td><td class="lvl l-rojo">🔴 Incorrecta</td><td>Mostraba el primer contacto — corregido a <code>updated_at</code></td></tr>
+<tr><td>Análisis del período</td><td><code>sofia_recommendations</code></td><td class="lvl l-nar">🟠 Dudosa</td><td>Mostraba el corte del 26/8 como si fuera de hoy — ahora avisa</td></tr>
+<tr><td>Atribución campaña → paciente</td><td>—</td><td class="lvl l-negro">⚫ Sin fuente</td><td>Zenvia no propaga el origen del anuncio</td></tr>
+</tbody>
+</table>
+</div>
+</section>
+
+<hr class="rule">
+
+<section id="d">
+<h2><span class="ltr">D</span> Facebook / Meta</h2>
+
+<h3>Qué funciona</h3>
+<p>La integración es real y está viva. Token válido, respuesta correcta de la Graph API v19.0, 15 campañas activas, cifras de gasto exactas. No hay nada simulado.</p>
+
+<h3>Qué estaba mal</h3>
+<ul>
+<li><strong>Sin autenticación</strong> (crítico, corregido).</li>
+<li><strong>Sin paginación.</strong> Meta devuelve 25 campañas por página. Con 15 hoy no falla; al llegar a 26 <em>todos</em> los totales se habrían subcontado sin ningún error visible. Corregido siguiendo <code>paging.next</code>.</li>
+<li><strong>Mes calculado en UTC.</strong> Cloudflare corre en UTC; entre las 00:00 y 06:00 UTC del día 1, el servidor ya está en el mes nuevo y Costa Rica no. Corregido a <code>America/Costa_Rica</code>.</li>
+<li><strong><code>clicks</code> y <code>reach</code> mal usados</strong> (ver sección B).</li>
+</ul>
+
+<h3>Lo que falta y no es un bug</h3>
+<p><strong>Definición de «resultado».</strong> La mayoría de campañas del CEC son de mensajes (click-to-WhatsApp). Para esas, el resultado real es la conversación iniciada — <strong>6.963 en agosto</strong> — no el evento <code>lead</code> — <strong>4.824</strong>. El dashboard mostraba solo el segundo. Ahora muestra ambos, etiquetados, con su costo respectivo: <strong>$1,22 por conversación</strong> frente a <strong>$1,76 por lead</strong>.</p>
+<p><strong>Sin desglose por ad set ni por anuncio.</strong> Solo llega a nivel de campaña, así que no se puede saber qué creativo funciona. Es un cambio chico (<code>level=ad</code>) pero es una vista nueva, no un arreglo.</p>
+<p><strong>Sin comparación contra el período anterior.</strong> No hay forma de ver si el CPL subió o bajó.</p>
+</section>
+
+<hr class="rule">
+
+<section id="e">
+<h2><span class="ltr">E</span> Sofía IA</h2>
+
+<h3>Lo que sí se puede medir hoy</h3>
+<p>Con datos reales y verificados: volumen de conversaciones, tasa de escalación y sus motivos, sentimiento, procedimiento de interés (taxonomía de 42 códigos con 97,1% de cobertura), canal de entrada, y cantidad de mensajes intercambiados.</p>
+
+<p>El desglose honesto de agosto, que ahora aparece en pantalla:</p>
+<div class="tw">
+<table>
+<thead><tr><th>Resultado</th><th class="num">Conversaciones</th><th class="num">%</th><th>Qué significa</th></tr></thead>
+<tbody>
+<tr><td><strong>Sin enganche</strong></td><td class="num">3.479</td><td class="num">40,4%</td><td>Escribieron una vez y no siguieron</td></tr>
+<tr><td><strong>Atendidas por Sofía</strong></td><td class="num">2.954</td><td class="num">34,4%</td><td>Hubo intercambio y no hizo falta un asesor</td></tr>
+<tr><td><strong>Escalaron a un asesor</strong></td><td class="num">2.177</td><td class="num">25,3%</td><td>Sofía pasó la conversación a una persona</td></tr>
+</tbody>
+</table>
+</div>
+<p>El 40,4% de abandono inmediato es, por sí solo, el hallazgo más accionable de toda la auditoría: <strong>4 de cada 10 personas por las que se pagó publicidad escriben una vez y desaparecen.</strong> Antes ese grupo estaba escondido dentro del «74,7% resueltas».</p>
+
+<h3>Lo que NO se puede medir, y qué haría falta</h3>
+<div class="tw">
+<table>
+<thead><tr><th>Pregunta</th><th>Estado</th><th>Qué se necesita</th></tr></thead>
+<tbody>
+<tr><td>¿Cuántas citas consiguió?</td><td class="lvl l-negro">⚫ Sin fuente</td><td><code>derived_to_appointment</code> está en 0 en toda la base. Que el Worker o el asesor lo marquen</td></tr>
+<tr><td>¿Cuánto tardó en responder?</td><td class="lvl l-negro">⚫ Sin fuente</td><td>Timestamp por mensaje en el Worker</td></tr>
+<tr><td>¿Duración promedio?</td><td class="lvl l-negro">⚫ Sin fuente</td><td><code>duration_minutes</code> existe pero está en 0 en las 8.610 filas</td></tr>
+<tr><td>¿Cuántos leads calificados?</td><td class="lvl l-nar">🟠 Dudosa</td><td>Hay dos definiciones de score en conflicto</td></tr>
+<tr><td>¿Costo por conversación?</td><td class="lvl l-amar">🟡 Parcial</td><td>Se calcula, pero divide gasto de Meta entre <em>todas</em> las conversaciones — incluidas las orgánicas y de TikTok</td></tr>
+<tr><td>¿Preguntas más frecuentes?</td><td class="lvl l-amar">🟡 Parcial</td><td>Hay tema, no la pregunta literal. Requiere agrupar los primeros mensajes</td></tr>
+<tr><td>¿Horarios de mayor demanda?</td><td class="lvl l-verde">🟢 Calculable</td><td>Ya está el dato en <code>created_at</code>; falta la vista</td></tr>
+</tbody>
+</table>
+</div>
+<p>La cadena que Sofía <em>debería</em> registrar — conversación → lead → calificación → intención → cita → seguimiento → conversión — <strong>se corta después de «intención»</strong>. Todo lo posterior está sin instrumentar.</p>
+</section>
+
+<hr class="rule">
+
+<section id="f">
+<h2><span class="ltr">F</span> Call Center</h2>
+
+<h3>El hallazgo que importa</h3>
+<p>La tabla <code>sofia_followup_status</code> tiene <strong>5 filas en toda su historia</strong>: 4 pendientes y 1 descartado. <strong>Cero contactados. Cero agendados.</strong> Frente a <strong>2.761 conversaciones en la cola de seguimiento.</strong></p>
+<p>El módulo existe y funciona; nadie lo usa. Mientras eso siga así no hay ninguna forma de medir conversión, y toda la mitad inferior del embudo permanece invisible por definición.</p>
+
+<h3>Puesto en el lugar de un asesor</h3>
+<div class="tw">
+<table>
+<thead><tr><th>¿Puedo…?</th><th>Hoy</th><th>Detalle</th></tr></thead>
+<tbody>
+<tr><td>Ver mis leads</td><td class="lvl l-amar">Parcial</td><td>No hay asignación por agente: todos ven la misma cola</td></tr>
+<tr><td>Saber a quién contactar primero</td><td class="lvl l-amar">Parcial</td><td>Seguimiento sí prioriza bien; Leads Potenciales no (ver B)</td></tr>
+<tr><td>Ver de dónde viene el lead</td><td class="lvl l-rojo">No</td><td>Solo el canal (WhatsApp/Facebook), nunca la campaña</td></tr>
+<tr><td>Ver qué habló con Sofía</td><td class="lvl l-amar">Parcial</td><td>Solo <code>last_message</code> y el motivo de escalación, no el hilo</td></tr>
+<tr><td>Saber qué quiere el paciente</td><td class="lvl l-verde">Sí</td><td><code>procedure_interest</code> con buena cobertura</td></tr>
+<tr><td>Registrar el resultado</td><td class="lvl l-verde">Sí</td><td>Existe y funciona — pero nadie lo usa</td></tr>
+<tr><td>Evitar contactar dos veces</td><td class="lvl l-rojo">No</td><td>Sin estados reales no hay forma de saber si un compañero ya llamó</td></tr>
+<tr><td>Saber qué leads están abandonados</td><td class="lvl l-rojo">No</td><td>No hay alertas por antigüedad sin contacto</td></tr>
+<tr><td>Continuar la conversación de Sofía</td><td class="lvl l-amar">Parcial</td><td>Se abre Zenvia aparte; no hay continuidad dentro del dashboard</td></tr>
+</tbody>
+</table>
+</div>
+</section>
+
+<hr class="rule">
+
+<section id="g">
+<h2><span class="ltr">G</span> Funnel</h2>
+<p>Dónde se pierde la trazabilidad, con los números reales de agosto:</p>
+
+<div class="funnel">
+  <div class="fstep"><div><div class="lbl">Publicidad</div><div class="st">Meta Ads, 15 campañas</div></div><div class="v">$8.493,96</div></div>
+  <div class="fstep"><div><div class="lbl">Conversaciones iniciadas</div><div class="st">Reportadas por Meta</div></div><div class="v">6.963</div></div>
+  <div class="fstep mid"><div><div class="lbl">Conversaciones en Sofía</div><div class="st">No empatan con las de Meta: incluyen orgánico, Facebook y TikTok</div></div><div class="v">8.610</div></div>
+  <div class="fstep"><div><div class="lbl">Con intercambio real</div><div class="st">Más de un mensaje</div></div><div class="v">5.131</div></div>
+  <div class="fstep"><div><div class="lbl">Escaladas a un asesor</div><div class="st">Intención suficiente para pasar a humano</div></div><div class="v">2.177</div></div>
+  <div class="cut">aquí se corta la trazabilidad</div>
+  <div class="fstep ko"><div><div class="lbl">Contactadas por Call Center</div><div class="st">El módulo existe, no se usa</div></div><div class="v">0</div></div>
+  <div class="fstep ko"><div><div class="lbl">Citas agendadas</div><div class="st">Sin fuente</div></div><div class="v">—</div></div>
+  <div class="fstep ko"><div><div class="lbl">Asistencia · Procedimiento · Ingresos</div><div class="st">Sin integración con agenda ni sistema clínico</div></div><div class="v">—</div></div>
+</div>
+
+<h3>Los dos agujeros negros</h3>
+<p><strong>1. Atribución.</strong> Meta entrega el identificador del anuncio en sus campañas click-to-WhatsApp, pero el mensaje llega vía Zenvia y ese dato no se propaga. Se puede decir «la campaña X generó 872 conversaciones» y se puede decir «hubo 8.610 conversaciones», pero <strong>no se puede decir qué pasó con las 872 concretas de esa campaña.</strong></p>
+<p><strong>2. Resultado comercial.</strong> Ninguna de las 9.984 conversaciones tiene marcado un desenlace. No es un problema de software: es que nadie registra el resultado.</p>
+<p class="note" style="display:block"><strong>Consecuencia práctica:</strong> hoy no se puede responder «¿cuál campaña trae pacientes que operan?». Solo «¿cuál campaña trae conversaciones más baratas?». Son preguntas distintas y la segunda puede llevar a subir el presupuesto de la campaña equivocada.</p>
+</section>
+
+<hr class="rule">
+
+<section id="h">
+<h2><span class="ltr">H</span> Calidad de datos</h2>
+<ul>
+<li><strong>Duplicados:</strong> prácticamente ninguno. 9.968 personas únicas sobre 9.984 filas. El bug de deduplicación de webhooks ya se había resuelto en el Worker.</li>
+<li><strong>Zona horaria:</strong> la mayoría de las secciones ya manejaban bien Costa Rica. Encontré dos excepciones: la ventana mensual de Meta (UTC) y las claves del eje de la gráfica diaria de Sofía, que se generaban en UTC mientras las conversaciones se agrupaban en hora de Costa Rica — en un navegador al este de UTC las dos series quedaban corridas un día. <strong>Ambas corregidas.</strong></li>
+<li><strong>Fallos silenciosos:</strong> el manejo es bueno — un error nunca pinta cero, muestra «—» y lo explica. Es una decisión de diseño correcta y bien aplicada.</li>
+<li><strong>Paginación:</strong> bien resuelta en las secciones de Sofía (bloques de 1.000). Faltaba en Meta.</li>
+<li><strong>Condiciones de carrera:</strong> ya resueltas en Métricas Sofía y Seguimiento. Faltaba la guarda en Métricas Meta — agregada.</li>
+<li><strong>Claves duplicadas de React:</strong> la cuenta tiene dos campañas distintas llamadas «MIA | Mensajes»; la tabla de Inicio las usaba como clave y React las confundía. Corregido.</li>
+<li><strong>Cobertura de teléfonos:</strong> 4.181 de 9.984 (42%), limitada por el tope de 5.000 sin paginación de la API de Zenvia.</li>
+<li><strong>Deriva entre repositorio y base:</strong> encontré una migración de seguridad que <em>se aplicó pero no hizo efecto</em> — hacía <code>revoke … from public</code>, que no quita el permiso explícito que Supabase concede a <code>anon</code>. El linter seguía marcándolo mientras el repositorio lo daba por resuelto. <strong>Corregido y verificado.</strong></li>
+</ul>
+</section>
+
+<hr class="rule">
+
+<section id="i">
+<h2><span class="ltr">I</span> UX / UI</h2>
+<p>El sistema visual es sólido y coherente. El problema no es estético sino de <strong>arquitectura de audiencias</strong>: hay once secciones en un solo menú plano, mezclando lo que necesita dirección con lo que necesita un asesor y lo que necesita quien configura la IA.</p>
+
+<h3>Separación propuesta</h3>
+<div class="tw">
+<table>
+<thead><tr><th>Audiencia</th><th>Debería ver</th><th>Hoy</th></tr></thead>
+<tbody>
+<tr><td><strong>Dirección</strong></td><td>Inversión, CPL, conversaciones, tendencia, comparación contra el período anterior</td><td>Inicio, sin comparaciones ni tendencia</td></tr>
+<tr><td><strong>Marketing</strong></td><td>Campañas, ad sets, anuncios, CTR, CPC, creativos</td><td>Métricas Meta, solo a nivel campaña</td></tr>
+<tr><td><strong>Sofía</strong></td><td>Volumen, escalación, calidad, temas</td><td>Bien cubierto</td></tr>
+<tr><td><strong>Call Center</strong></td><td>Mi cola, mis pendientes, urgentes, historial</td><td>Repartido entre Leads Potenciales, Seguimiento y Pacientes, con dos scores en conflicto</td></tr>
+</tbody>
+</table>
+</div>
+<p>La fricción concreta más grande para un asesor: <strong>Leads Potenciales y Seguimiento resuelven el mismo problema con dos criterios distintos.</strong> Consolidarlas en una sola cola priorizada es la mejora de mayor impacto para ese equipo.</p>
+</section>
+
+<hr class="rule">
+
+<section id="j">
+<h2><span class="ltr">J</span> Nuevas funcionalidades recomendadas</h2>
+<div class="tw">
+<table>
+<thead><tr><th>Prioridad</th><th>Propuesta</th><th>Impacto</th><th>Complejidad</th><th>Depende de</th></tr></thead>
+<tbody>
+<tr><td class="lvl l-rojo">P0</td><td>Sacar <code>VITE_SOFIA_SECRET</code> del bundle y rotar el secreto</td><td>Alto</td><td>Media</td><td>—</td></tr>
+<tr><td class="lvl l-rojo">P0</td><td>Que el Call Center registre el resultado de cada contacto</td><td>Muy alto</td><td>Baja (ya existe)</td><td>Proceso, no software</td></tr>
+<tr><td class="lvl l-rojo">P0</td><td>Unificar los dos scores en una sola cola priorizada en Postgres</td><td>Muy alto</td><td>Media</td><td>Decidir la fórmula</td></tr>
+<tr><td class="lvl l-nar">P1</td><td>RLS por rol: que los módulos se apliquen en la base</td><td>Alto</td><td>Media</td><td>Definir quién edita a Sofía</td></tr>
+<tr><td class="lvl l-nar">P1</td><td>Propagar el identificador de anuncio de Meta a través de Zenvia</td><td>Muy alto</td><td>Alta</td><td>Soporte de Zenvia</td></tr>
+<tr><td class="lvl l-nar">P1</td><td>Comparación contra el período anterior en todos los KPIs</td><td>Alto</td><td>Baja</td><td>—</td></tr>
+<tr><td class="lvl l-nar">P1</td><td>Alertas: lead caliente sin contactar &gt;24h, CPL disparado, sincronización caída</td><td>Alto</td><td>Media</td><td>P0 de registro</td></tr>
+<tr><td class="lvl l-nar">P1</td><td>Métrica de abandono: por qué el 40,4% escribe una vez y se va</td><td>Muy alto</td><td>Baja</td><td>—</td></tr>
+<tr><td class="lvl l-amar">P2</td><td>Desglose por ad set y anuncio (<code>level=ad</code>)</td><td>Medio</td><td>Baja</td><td>—</td></tr>
+<tr><td class="lvl l-amar">P2</td><td>Vista de horarios de mayor demanda</td><td>Medio</td><td>Baja</td><td>—</td></tr>
+<tr><td class="lvl l-amar">P2</td><td>Asignación de leads por agente</td><td>Alto</td><td>Media</td><td>Definir el proceso</td></tr>
+<tr><td class="lvl l-amar">P2</td><td>Registrar la inversión en TikTok</td><td>Medio</td><td>Media</td><td>Acceso a TikTok Ads</td></tr>
+<tr><td class="lvl l-negro">P3</td><td>Hilo completo de la conversación en la ficha del lead</td><td>Medio</td><td>Media</td><td>—</td></tr>
+<tr><td class="lvl l-negro">P3</td><td>Exportar a CSV</td><td>Bajo</td><td>Baja</td><td>—</td></tr>
+</tbody>
+</table>
+</div>
+</section>
+
+<hr class="rule">
+
+<section id="k">
+<h2><span class="ltr">K</span> Mejoras implementadas</h2>
+<p>Once cambios, todos verificados con <code>vite build</code> y, donde aplica, contra la base de producción.</p>
+
+<h3>Seguridad</h3>
+<ol>
+<li><strong><code>functions/api/meta-metrics.js</code></strong> — ahora exige el token de sesión de Supabase. Se eliminó también el <code>Access-Control-Allow-Origin: *</code>.</li>
+<li><strong>Migración <code>current_user_is_admin_revoke_anon_real</code></strong> — aplicada y verificada: <code>anon</code> pasó de poder ejecutar la función a no poder. Las 4 policies de <code>profiles</code> siguen intactas.</li>
+</ol>
+
+<h3>Veracidad de las métricas</h3>
+<ol start="3">
+<li><strong>Métricas Sofía</strong> — eliminado el KPI «Resueltas sin asesor» (74,7%), reemplazado por «Sin enganche» y una tarjeta con el desglose de tres grupos excluyentes que suman el total, con nota explícita de que ninguno mide conversión.</li>
+<li><strong>Métricas Meta</strong> — «Clics» pasa a usar <code>inline_link_clicks</code>; «Impresiones» deja de rotularse «Alcance total»; se agregan «Conversaciones iniciadas» y «Costo por conversación».</li>
+<li><strong><code>reach</code></strong> — deja de sumarse entre campañas; se devuelve <code>null</code> con la explicación.</li>
+<li><strong>Leads Potenciales</strong> — «Última actividad» pasa de <code>created_at</code> a <code>updated_at</code>. Afectaba hasta 17 de los 20 puntos de recencia del score. Se agregan ambas fechas en la ficha.</li>
+</ol>
+
+<h3>Correcciones técnicas</h3>
+<ol start="7">
+<li><strong>Paginación de Meta</strong> — sigue <code>paging.next</code>; ya no se subcontará al pasar de 25 campañas.</li>
+<li><strong>Ventana mensual</strong> — se calcula en hora de Costa Rica, no en UTC del servidor.</li>
+<li><strong>Gráfica diaria de Sofía</strong> — claves del eje generadas como fechas calendario, no vía <code>toISOString()</code>. Probado en cruce de mes, de año, rango de un día y rango invertido.</li>
+<li><strong>Inicio</strong> — clave de React única por campaña (había dos «MIA | Mensajes»); el donut de sentimiento ahora incluye «Sin clasificar» para que las partes sumen el total.</li>
+<li><strong>Avisos en pantalla</strong> — Leads Potenciales advierte que el orden por score es por página; Recomendaciones advierte cuando el análisis visible tiene días de antigüedad.</li>
+</ol>
+<p>Además: <code>docs/DATA_AUDIT.md</code> con la matriz completa, y <code>src/lib/api.js</code> con el patrón de llamada autenticada reutilizable.</p>
+</section>
+
+<hr class="rule">
+
+<section id="l">
+<h2><span class="ltr">L</span> Lo que no implementé, y por qué</h2>
+
+<div class="find c3">
+  <h4><span class="tag t-info">Requiere decisión</span> Restringir la escritura de <code>sofia_config</code> a administradores</h4>
+  <p>Hoy cualquier usuario autenticado puede reescribir el prompt de Sofía. Endurecerlo es correcto en principio, pero <strong>le quitaría el acceso a usuarios no-admin que quizá deban tenerlo</strong> — «Configurar a Sofía» es un módulo asignable. Definan quién debe poder editarla y lo aplico.</p>
+</div>
+
+<div class="find c3">
+  <h4><span class="tag t-info">Requiere decisión</span> Unificar las dos fórmulas de lead score</h4>
+  <p>Existen dos, con pesos distintos. Elegir una cambia el orden en que el Call Center trabaja la cola: es una decisión comercial sobre qué hace valioso a un lead, no técnica.</p>
+</div>
+
+<div class="find c3">
+  <h4><span class="tag t-info">Requiere despliegue coordinado</span> Sacar el secreto compartido del bundle</h4>
+  <p>Son seis endpoints y sus llamadas desde el cliente. El patrón ya está resuelto en <code>src/lib/api.js</code>, pero migrarlos todos de una vez, rotar el secreto y desplegar es un cambio que conviene hacer con la posibilidad de probarlo en vivo — y <code>/api/*</code> no corre bajo <code>vite dev</code>.</p>
+</div>
+
+<div class="find c3">
+  <h4><span class="tag t-info">Requiere infraestructura</span> Atribución, conversión e ingresos</h4>
+  <p>Dependen de terceros: que Zenvia propague el identificador del anuncio, y de una integración con la agenda y el sistema clínico. Nada de esto se resuelve en este repositorio.</p>
+</div>
+
+<div class="note">
+  <p><strong>Verificación — lo que no pude comprobar.</strong> No tengo credenciales del dashboard, así que las secciones tras el login se validaron por compilación, revisión de código y consultas SQL contra producción, <strong>no viéndolas renderizadas</strong>. El propio repositorio advierte que «compilar no es ejecutar». <strong>Recomiendo abrir Métricas Sofía, Métricas Meta, Inicio, Leads Potenciales y Recomendaciones tras desplegar</strong>, antes de darlas por buenas. También queda sin verificar si el registro público de Supabase está cerrado: comprobarlo habría creado una cuenta real.</p>
+</div>
+</section>
+
+<hr class="rule">
+
+<section id="m">
+<h2><span class="ltr">M</span> Roadmap</h2>
+
+<div class="phase">
+  <p class="when">Inmediato · 0–7 días</p>
+  <ol>
+    <li><strong>Desplegar los cambios de hoy</strong> y revisar las cinco secciones tocadas en producción.</li>
+    <li><strong>Rotar <code>VITE_SOFIA_SECRET</code></strong> y migrar los seis endpoints al patrón de token de sesión.</li>
+    <li><strong>Confirmar que el registro público de Supabase esté cerrado.</strong></li>
+    <li><strong>Decidir quién usa Seguimiento y arrancar.</strong> Sin esto el embudo sigue ciego, y ninguna mejora técnica lo compensa.</li>
+    <li><strong>Avisar de TikTok</strong> — hay tráfico de ese canal sin inversión registrada en el dashboard.</li>
+  </ol>
+</div>
+
+<div class="phase">
+  <p class="when">Corto plazo · 1–4 semanas</p>
+  <ol>
+    <li>Unificar los dos scores en una sola cola priorizada calculada en Postgres.</li>
+    <li>Aplicar los permisos por módulo en RLS, no solo en el menú.</li>
+    <li>Comparación contra el período anterior en todos los KPIs.</li>
+    <li>Investigar el 40,4% de abandono inmediato: qué pregunta la gente que escribe una vez y se va.</li>
+    <li>Primeras alertas: lead caliente sin contactar más de 24h, y sincronización de Meta caída.</li>
+  </ol>
+</div>
+
+<div class="phase">
+  <p class="when">Mediano plazo · 1–3 meses</p>
+  <ol>
+    <li>Atribución de punta a punta: identificador del anuncio de Meta propagado por Zenvia.</li>
+    <li>Integración con la agenda para cerrar el embudo hasta la cita y la asistencia.</li>
+    <li>Separar las cuatro vistas por audiencia (dirección / marketing / Sofía / Call Center).</li>
+    <li>Instrumentar tiempo de respuesta y duración de conversación en el Worker.</li>
+    <li>Con conversión e ingresos disponibles, recién ahí: ROAS por campaña.</li>
+  </ol>
+</div>
+
+<div class="note">
+  <p><strong>El criterio de fondo.</strong> El objetivo no es que el dashboard tenga más cifras, sino que cada cifra que aparezca sea defendible. Hoy hay dos clases de métrica: las que miden algo real y las que no existen. Lo peligroso era la tercera clase — las que parecían medir una cosa y medían otra. Ese grupo es el que se atacó hoy; lo que queda es honesto sobre lo que todavía no se puede saber.</p>
+</div>
+</section>
+
+</div>
