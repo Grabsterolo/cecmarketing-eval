@@ -64,10 +64,10 @@ function clampToMinDate(value) {
   return value < MIN_DATE ? MIN_DATE : value;
 }
 
-// Lunes de la semana actual en hora de Costa Rica, para el KPI "Contactados
-// esta semana". Se calcula sobre los componentes de fecha (año/mes/día) del
-// día de hoy en CR, no sobre timestamps UTC, para que el corte de semana no
-// se desplace por el offset horario.
+// Lunes de la semana actual en hora de Costa Rica, para el KPI "En
+// seguimiento abierto". Se calcula sobre los componentes de fecha
+// (año/mes/día) del día de hoy en CR, no sobre timestamps UTC, para que el
+// corte de semana no se desplace por el offset horario.
 function startOfWeekISO() {
   const [y, m, d] = todayISO().split("-").map(Number);
   const dow = new Date(Date.UTC(y, m - 1, d)).getUTCDay();
@@ -567,7 +567,7 @@ export function SeguimientoSection({ profile }) {
   //
   // "Pendientes de contactar"/"Pendientes de cirugía" respetan el rango de
   // fechas elegido (from/to) para no quedar como un conteo histórico abierto.
-  // "Contactados esta semana" y "Agendados desde el módulo" quedan fuera del
+  // "En seguimiento abierto" y "Agendados desde el módulo" quedan fuera del
   // rango a propósito: tienen su propio período con sentido (semana
   // calendario / total histórico acumulado).
   const loadKpis = useCallback(async (rangeFrom, rangeTo) => {
@@ -655,7 +655,7 @@ export function SeguimientoSection({ profile }) {
     });
 
     // Los KPIs se recuentan siempre, aunque la fila no esté en la lista
-    // cargada: "Contactados esta semana" y "Agendados desde el módulo" tienen
+    // cargada: "En seguimiento abierto" y "Agendados desde el módulo" tienen
     // su propio período y pueden moverse por una conversación fuera del rango
     // que se está viendo.
     const { from: rangeFrom, to: rangeTo } = rangeRef.current;
@@ -769,7 +769,14 @@ export function SeguimientoSection({ profile }) {
           <MetricKpi label="Pendientes de cirugía" value={kpisLoading || kpis.pendientesCirugia === null ? "—" : `${kpis.pendientesCirugia}`} sub="Sobre los pendientes del rango" />
         </Card>
         <Card>
-          <MetricKpi label="Contactados esta semana" value={kpisLoading || kpis.contactadosSemana === null ? "—" : `${kpis.contactadosSemana}`} sub="Desde el lunes" />
+          {/* La consulta cuenta filas cuyo estado ACTUAL es "contactado", así
+              que un lead que avanza a "agendó" sale de este número. Por eso la
+              etiqueta no dice "Contactados esta semana": así dicha, bajaba
+              cuando el equipo trabajaba mejor. Dice lo que el número es —
+              leads contactados que siguen abiertos. Para contar contactos de
+              verdad haría falta guardar cuándo se contactó cada uno, y hoy la
+              tabla no lo guarda: solo el último estado. */}
+          <MetricKpi label="En seguimiento abierto" value={kpisLoading || kpis.contactadosSemana === null ? "—" : `${kpis.contactadosSemana}`} sub="Contactados esta semana, sin cerrar" />
         </Card>
         <Card>
           <MetricKpi label="Agendados desde el módulo" value={kpisLoading || kpis.agendados === null ? "—" : `${kpis.agendados}`} sub="Total histórico" />

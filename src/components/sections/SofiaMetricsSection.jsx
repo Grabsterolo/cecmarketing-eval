@@ -339,7 +339,7 @@ export function SofiaMetricsSection({ setActive }) {
   //
   // message_count arranca en 1 (no hay ceros), así que == 1 es exactamente
   // "escribió una sola vez y no siguió". El desglose de abajo reparte el
-  // 100% en tres grupos excluyentes y no interpreta ninguno como éxito.
+  // 100% en tres grupos que no se solapan, y no interpreta ninguno como éxito.
   const sinEnganche = conversations.filter((c) => (c.message_count || 0) <= 1).length;
   const atendidasPorSofia = conversations.filter(
     (c) => (c.message_count || 0) > 1 && !c.escalated
@@ -350,8 +350,8 @@ export function SofiaMetricsSection({ setActive }) {
       detail: "Sofía pasó la conversación a una persona" },
     { label: "Atendidas por Sofía", n: atendidasPorSofia, color: COLORS.success,
       detail: "Hubo intercambio y no hizo falta un asesor" },
-    { label: "Sin enganche", n: sinEnganche, color: COLORS.textMuted,
-      detail: "Escribieron una sola vez y no siguieron" },
+    { label: "No siguieron", n: sinEnganche, color: COLORS.textMuted,
+      detail: "Escribieron una sola vez y no volvieron a responder" },
   ];
 
   const positiveOrNeutral = conversations.filter((c) => {
@@ -452,10 +452,10 @@ export function SofiaMetricsSection({ setActive }) {
             </Card>
             <Card>
               <MetricKpi
-                label="Sin enganche"
+                label="No siguieron"
                 value={`${pct(sinEnganche)}%`}
-                sub="Escribieron una vez y no siguieron"
-                note="No son conversaciones resueltas"
+                sub="Escribieron una vez y no volvieron a responder"
+                note="No quiere decir que Sofía las haya resuelto"
               />
             </Card>
             <Card>
@@ -478,7 +478,7 @@ export function SofiaMetricsSection({ setActive }) {
               En qué terminó cada conversación
             </h3>
             <p style={{ margin: "0 0 16px", fontSize: 13, color: COLORS.textMuted, fontFamily: "'Manrope', sans-serif" }}>
-              Los tres grupos son excluyentes y suman el total del rango.
+              Cada conversación entra en un solo grupo. Los tres juntos suman el total del período.
             </p>
             {totalConversations === 0 ? (
               <p style={{ margin: 0, fontSize: 13, color: COLORS.textMuted, fontFamily: "'Manrope', sans-serif" }}>
@@ -508,10 +508,10 @@ export function SofiaMetricsSection({ setActive }) {
                   ))}
                 </div>
                 <p style={{ margin: "14px 0 0", fontSize: 11.5, lineHeight: 1.5, color: COLORS.textMuted, fontFamily: "'Manrope', sans-serif" }}>
-                  <strong>"Atendidas por Sofía" no quiere decir que el paciente haya agendado.</strong> Hoy
-                  no se registra el resultado comercial de la conversación
-                  (<code>derived_to_appointment</code> está en cero en toda la base), así que ninguna
-                  de estas cifras mide conversión.
+                  <strong>Ninguno de estos tres grupos quiere decir que la persona haya agendado.</strong> Acá
+                  se ve cómo terminó la conversación con Sofía, no si la persona llegó a la clínica.
+                  Eso se anota a mano en Seguimiento, y mientras no se anote ahí no hay manera de
+                  saber cuántas de estas conversaciones terminaron en cita.
                 </p>
               </>
             )}
