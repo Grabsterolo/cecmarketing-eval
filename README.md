@@ -144,6 +144,7 @@ Las que importan para que el dashboard funcione:
 | `sofia_set_phones_rpc` | Función `sofia_set_phones()`: escribe teléfonos. SECURITY DEFINER, solo service_role. |
 | `sofia_conversations_updated_at` | Columna `updated_at` + trigger. |
 | `sofia_pacientes_v2` | Vista `sofia_pacientes`, base de la sección Pacientes. |
+| `seguimiento_realtime_y_actor` | Expone `estado_actualizado_en` en `sofia_followup_queue` y mete `sofia_followup_status` en la publicación `supabase_realtime`. Es lo que hace que Seguimiento se sincronice en vivo entre usuarios. |
 
 **Hecho el 2026-08-27:** el SQL está en `supabase/migrations/`. Lo que sigue
 pendiente es configurar el CLI o CI para que se apliquen solos.
@@ -203,10 +204,14 @@ Dos cosas deliberadas de esa taxonomía:
 
 ### Lo que NO se puede medir hoy, y por qué
 
-- **Conversión a paciente.** `derived_to_appointment` está en 0 en todas las
-  filas: nadie la escribe. `sofia_followup_status` tiene 4 filas y **cero
-  "agendó"** — el módulo de Seguimiento existe pero el equipo no lo usa
-  (2.437 pendientes, 0 contactados). Es problema de proceso, no de software.
+- **Conversión a paciente.** `derived_to_appointment` sigue en 0 en todas las
+  filas: nadie la escribe, así que la conversión real no se puede cerrar
+  contra `sofia_conversations`. Lo que sí cambió es el módulo de Seguimiento:
+  al 2026-09-02 `sofia_followup_status` tiene **68 filas** marcadas por 4
+  personas — 32 contactados, 11 agendados, 16 descartados, sobre 3.079
+  pendientes. O sea que hoy la única medida de conversión que existe es la que
+  el equipo marca a mano en Seguimiento.
+  (Antes acá decía "4 filas, cero agendó, el equipo no lo usa" — quedó viejo.)
 - **Atribución publicitaria.** Sofía no recibe de qué anuncio viene cada
   paciente. Se revisó el objeto Prospect de Zenvia: su campo `leads` trae
   `source`/`utmSource`, pero con valor `"WHATSAPP"` — sin campaña ni anuncio.
@@ -360,8 +365,10 @@ tocar `processInboundMessage()` o la deduplicación de interacciones.
   de los casos, contra 11,9% del resto de consultas quirúrgicas. Cerrar con
   una pregunta NO ayuda (61,8% vs 65,3%): Sofía ya lo hace en 3 de cada 4.
   Qué ofrecer en ese mensaje es decisión comercial del CEC.
-- **Que alguien use Seguimiento.** 2.437 pendientes, 0 contactados, 0
-  agendados. Sin esto no hay forma de medir conversión real.
+- **Cerrar el círculo de Seguimiento.** Ya se usa (68 leads marcados, 11
+  agendados al 2026-09-02), pero lo que se marca ahí no vuelve a
+  `sofia_conversations`: `derived_to_appointment` sigue en 0, así que las
+  métricas de Sofía no ven esos 11 agendados.
 - **Avisarle al cliente lo de TikTok** — 264 conversaciones sin inversión
   registrada en ese canal.
 - **Frecuencia del reporte en Cloudflare.** El código genera cortes de 5 días,

@@ -1,5 +1,5 @@
-import React, { useCallback, useEffect, useMemo, useState } from "react";
-import { PhoneCall, ExternalLink, ChevronDown, ChevronLeft, ChevronRight, Smile, Minus, Frown } from "lucide-react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { PhoneCall, ExternalLink, ChevronDown, ChevronLeft, ChevronRight, Smile, Minus, Frown, Radio, RadioTower } from "lucide-react";
 import { COLORS } from "../../constants/colors.js";
 import { PROCEDURE_OPTIONS, matchesProcedure, formatProcedure } from "../../constants/procedures.js";
 import { Card } from "../ui/Card.jsx";
@@ -24,7 +24,11 @@ const PAGE_SIZE = 25;
 // SofiaMetricsSection.jsx.
 const FETCH_PAGE_SIZE = 1000;
 
-const QUEUE_COLUMNS = "id, phone_number, phone_hash, procedure_interest, procedure_code, escalation_reason, channel, message_count, sentiment, created_at, prospect_id, origen, categoria, score, estado, nota, actualizado_por";
+// estado_actualizado_en es st.updated_at de sofia_followup_status expuesto por
+// la vista (migración 20260902231711) — cuándo alguien del equipo tocó el
+// estado, NO cuándo se actualizó la conversación. Se usa para el "por X · hace
+// Nmin" de cada tarjeta.
+const QUEUE_COLUMNS = "id, phone_number, phone_hash, procedure_interest, procedure_code, escalation_reason, channel, message_count, sentiment, created_at, prospect_id, origen, categoria, score, estado, nota, actualizado_por, estado_actualizado_en";
 
 const ORIGEN_LABEL = { escalada_sin_cita: "Escalada sin cita", cerrada_sin_escalar: "Cerrada sin escalar" };
 const CATEGORIA_LABEL = { cirugia: "Cirugía", tratamiento_no_quirurgico: "No quirúrgico" };
@@ -99,6 +103,32 @@ const TIER_STYLES = {
   alto: { bg: COLORS.dangerBg, fg: COLORS.danger },
   medio: { bg: "rgba(201,162,78,0.14)", fg: COLORS.gold },
   bajo: { bg: "rgba(31,74,64,0.08)", fg: COLORS.textMuted },
+};
+
+// Colores del sello "Contactado por Ana · hace 5min" que va en cada tarjeta.
+// Van por estado para que se lea de un vistazo cuál ya está trabajado.
+// "pendiente" también tiene color: alguien puede haber dejado una nota sin
+// cambiar el estado, y eso igual significa que ese lead ya tiene dueño. La
+// tarjeta queda sin sello solo cuando no hay actualizado_por, o sea cuando
+// nadie lo tocó nunca.
+// El sello no puede reusar ESTADO_LABEL: esas etiquetas están redactadas para
+// el dropdown ("Agendó", "Pendiente") y pegadas a un "por Fulana" quedan mal
+// en español ("Agendó por Valeria"). Acá van en participio, que es lo que pide
+// la frase.
+const SELLO_VERBO = {
+  pendiente: "Visto por",
+  contactado: "Contactado por",
+  agendo: "Agendado por",
+  descartado: "Descartado por",
+  no_contactable: "Marcado no contactable por",
+};
+
+const ESTADO_SELLO = {
+  contactado: { bg: "rgba(201,162,78,0.14)", fg: COLORS.gold },
+  agendo: { bg: "rgba(31,74,64,0.10)", fg: COLORS.success },
+  descartado: { bg: "rgba(31,74,64,0.08)", fg: COLORS.textMuted },
+  no_contactable: { bg: "rgba(31,74,64,0.08)", fg: COLORS.textMuted },
+  pendiente: { bg: "rgba(31,74,64,0.08)", fg: COLORS.textMuted },
 };
 
 const SENTIMENT_ICON = {
@@ -215,6 +245,56 @@ function FilterBar({
         </p>
       )}
     </div>
+  );
+}
+
+// Indicador del canal realtime. No es decoración: cuando dice "Sin conexión
+// en vivo" el equipo está viendo una foto del momento en que cargó, y dos
+// personas pueden volver a pisarse — por eso el estado caído es el único que
+// grita (color de peligro y una instrucción concreta).
+function LiveIndicator({ status, onReload }) {
+  if (status === "vivo") {
+    return (
+      <span style={{
+        display: "inline-flex", alignItems: "center", gap: 6,
+        fontSize: 12, fontWeight: 600, color: COLORS.success,
+        fontFamily: "'Manrope', sans-serif",
+      }}>
+        <RadioTower size={13} /> En vivo — los cambios de tu equipo aparecen solos
+      </span>
+    );
+  }
+
+  if (status === "conectando") {
+    return (
+      <span style={{
+        display: "inline-flex", alignItems: "center", gap: 6,
+        fontSize: 12, color: COLORS.textMuted, fontFamily: "'Manrope', sans-serif",
+      }}>
+        <Radio size={13} /> Conectando en vivo...
+      </span>
+    );
+  }
+
+  return (
+    <span style={{
+      display: "inline-flex", alignItems: "center", gap: 6, flexWrap: "wrap",
+      fontSize: 12, fontWeight: 600, color: COLORS.danger,
+      fontFamily: "'Manrope', sans-serif",
+    }}>
+      <Radio size={13} /> Sin conexión en vivo — puede que alguien más ya haya contactado a estos leads.
+      <button
+        onClick={onReload}
+        style={{
+          background: "none", border: "none", padding: 0,
+          color: COLORS.danger, fontSize: 12, fontWeight: 700,
+          fontFamily: "'Manrope', sans-serif", cursor: "pointer",
+          textDecoration: "underline",
+        }}
+      >
+        Recargar la lista
+      </button>
+    </span>
   );
 }
 
@@ -367,6 +447,24 @@ function FollowupRow({ group, onUpdateStatus, error }) {
           <p style={{ margin: 0, fontSize: 12, color: COLORS.textMuted, fontFamily: "'Manrope', sans-serif" }}>
             {conv.message_count || 0} mensajes · {formatRelative(conv.created_at)} · {formatFullDate(conv.created_at)}
           </p>
+
+          {/* Quién tocó este lead y cuándo — a la vista en la tarjeta, no
+              escondido dentro de la nota. Es lo que evita que dos personas
+              llamen al mismo paciente: aunque el realtime falle, acá se ve
+              que alguien más ya lo trabajó. Solo aparece si hay un actor
+              registrado (nadie tocó = tarjeta limpia). */}
+          {conv.actualizado_por && (
+            <p style={{
+              display: "inline-flex", alignItems: "center", gap: 6,
+              margin: "6px 0 0", padding: "3px 8px", borderRadius: 6,
+              fontSize: 11, fontWeight: 700, fontFamily: "'Manrope', sans-serif",
+              background: (ESTADO_SELLO[conv.estado] || ESTADO_SELLO.pendiente).bg,
+              color: (ESTADO_SELLO[conv.estado] || ESTADO_SELLO.pendiente).fg,
+            }}>
+              {SELLO_VERBO[conv.estado] || `${ESTADO_LABEL[conv.estado] || conv.estado} por`} {conv.actualizado_por}
+              {conv.estado_actualizado_en && ` · ${formatRelative(conv.estado_actualizado_en)}`}
+            </p>
+          )}
         </div>
 
         <select
@@ -401,12 +499,10 @@ function FollowupRow({ group, onUpdateStatus, error }) {
 
       {notaOpen && (
         <div style={{ marginTop: 14, paddingTop: 14, borderTop: `1px solid ${COLORS.border}` }}>
+          {/* El "por quién / cuándo" ya no vive acá: subió a la tarjeta, donde
+              se ve sin tener que abrir la nota (era el punto ciego que dejaba
+              repetir llamadas). */}
           <NotaEditor conversationId={conv.id} initialNota={conv.nota} onSave={onUpdateStatus} />
-          {conv.actualizado_por && (
-            <p style={{ margin: "8px 0 0", fontSize: 11, color: COLORS.textMuted, fontFamily: "'Manrope', sans-serif" }}>
-              Última actualización por {conv.actualizado_por}
-            </p>
-          )}
         </div>
       )}
     </Card>
@@ -435,6 +531,35 @@ export function SeguimientoSection({ profile }) {
 
   const [kpis, setKpis] = useState({ pendientes: null, pendientesCirugia: null, contactadosSemana: null, agendados: null });
   const [kpisLoading, setKpisLoading] = useState(true);
+
+  // "conectando" | "vivo" | "caido" — estado de la suscripción realtime. Se
+  // muestra en pantalla a propósito: si el canal se cae, el equipo tiene que
+  // saber que está viendo una foto vieja y que le toca recargar, en vez de
+  // confiar en que los cambios de los demás van a aparecer solos.
+  const [liveStatus, setLiveStatus] = useState("conectando");
+
+  // Bumpear reloadKey vuelve a traer la lista sin recargar la página. Lo usa
+  // la reconexión del canal y el botón del indicador cuando está caído.
+  const [reloadKey, setReloadKey] = useState(0);
+
+  // Realtime NO reenvía lo que se perdió mientras el canal estuvo caído: si a
+  // alguien se le duerme la laptop, al volver el socket se reengancha y los
+  // cambios de ese hueco no llegan nunca. Sin este flag el indicador diría
+  // "En vivo" sobre datos viejos — peor que no tener realtime, porque miente
+  // con confianza. Por eso cada RE-conexión (no la primera) refresca la lista.
+  const yaEstuvoEnVivo = useRef(false);
+
+  // Rango de la última carga, para distinguir "carga nueva" (montaje o cambio
+  // de fechas → pantalla de carga) de "refresco" (reconexión o botón → en
+  // silencio, sin desarmar la lista que el equipo está mirando).
+  const prevRangeRef = useRef(null);
+  const [refreshing, setRefreshing] = useState(false);
+
+  // El rango vive en un ref además de en el estado para que la suscripción
+  // realtime no se tenga que recrear cada vez que alguien mueve las fechas —
+  // el handler necesita el rango solo para recontar los KPIs.
+  const rangeRef = useRef({ from, to });
+  useEffect(() => { rangeRef.current = { from, to }; }, [from, to]);
 
   // Si alguna de las 4 queries falla (p.ej. la tabla/vista todavía no existe),
   // el KPI queda en null y se muestra "—" en vez de "0" — un 0 falso podría
@@ -476,25 +601,124 @@ export function SeguimientoSection({ profile }) {
     // 1000 filas, así que cambiar de fecha durante una carga dejaba que la
     // respuesta del rango viejo pisara a la del nuevo.
     let cancelled = false;
+
+    // Un refetch por reconexión (o por el botón del indicador) NO es una carga
+    // nueva: la lista de abajo sigue siendo válida. Blanquearla con "Cargando
+    // seguimiento..." haría parpadear la pantalla cada vez que se recupera el
+    // wifi. Solo el montaje y el cambio de rango muestran el estado de carga
+    // completo; el resto refresca en silencio, con un "Actualizando..." chico.
+    const rangeKey = `${from}|${to}`;
+    const esCargaNueva = prevRangeRef.current !== rangeKey;
+    prevRangeRef.current = rangeKey;
+
     (async () => {
-      setLoading(true);
+      if (esCargaNueva) setLoading(true);
+      else setRefreshing(true);
       setError(null);
       const { data, error: fetchError } = await fetchAllInRange(from, to);
       if (cancelled) return;
       if (fetchError) setError(fetchError.message);
       else setRawRows(data || []);
       setLoading(false);
+      setRefreshing(false);
     })();
     return () => { cancelled = true; };
-  }, [from, to]);
+  }, [from, to, reloadKey]);
 
   // Cambiar cualquier filtro vuelve a la página 1 — si no, se puede quedar
   // viendo una página que ya no existe con el filtro nuevo.
   useEffect(() => { setPage(1); }, [from, to, origen, categoria, estado, canal, procedimiento, search]);
 
+  // Aplica a la lista en memoria un cambio hecho por OTRA persona (o por uno
+  // mismo en otra pestaña) que llegó por realtime.
+  const applyRemoteStatus = useCallback((statusRow) => {
+    if (!statusRow?.conversation_id) return;
+
+    setRawRows((rows) => {
+      let hit = false;
+      const next = rows.map((r) => {
+        if (r.id !== statusRow.conversation_id) return r;
+        hit = true;
+        // Se copian SOLO estos cuatro campos, nada de spread del payload: el
+        // evento trae las columnas de sofia_followup_status, y su created_at
+        // es el de la fila de ESTADO — un spread pisaría el created_at de la
+        // conversación, que es el que ordena la lista y fecha la tarjeta.
+        return {
+          ...r,
+          estado: statusRow.estado,
+          nota: statusRow.nota,
+          actualizado_por: statusRow.actualizado_por,
+          estado_actualizado_en: statusRow.updated_at,
+        };
+      });
+      return hit ? next : rows;
+    });
+
+    // Los KPIs se recuentan siempre, aunque la fila no esté en la lista
+    // cargada: "Contactados esta semana" y "Agendados desde el módulo" tienen
+    // su propio período y pueden moverse por una conversación fuera del rango
+    // que se está viendo.
+    const { from: rangeFrom, to: rangeTo } = rangeRef.current;
+    loadKpis(rangeFrom, rangeTo);
+  }, [loadKpis]);
+
+  // Suscripción realtime a sofia_followup_status. Sin esto el módulo cargaba
+  // la lista una sola vez y dos personas podían llamar al mismo paciente: el
+  // estado se guardaba compartido, pero nadie se enteraba hasta recargar.
+  //
+  // La tabla está en la publicación supabase_realtime desde la migración
+  // 20260902231711 — sin esa parte, este canal conecta igual ("SUBSCRIBED")
+  // pero no llega ni un evento.
+  //
+  // Solo INSERT y UPDATE: la app nunca borra filas de estado. El único DELETE
+  // posible viene del ON DELETE CASCADE de sofia_conversations, y en ese caso
+  // desaparece también la conversación, así que la fila se va de la vista en
+  // la siguiente carga igual.
+  useEffect(() => {
+    // Sufijo aleatorio en el topic: StrictMode monta, desmonta y vuelve a
+    // montar los efectos en desarrollo, y removeChannel() es asíncrono — dos
+    // canales con el MISMO topic solapados se pisan y pueden duplicar eventos
+    // o no suscribirse. Con un topic por montaje eso no puede pasar.
+    const channel = supabase
+      .channel(`seguimiento-followup-status-${Math.random().toString(36).slice(2, 10)}`)
+      .on(
+        "postgres_changes",
+        { event: "INSERT", schema: "public", table: "sofia_followup_status" },
+        (payload) => applyRemoteStatus(payload.new)
+      )
+      .on(
+        "postgres_changes",
+        { event: "UPDATE", schema: "public", table: "sofia_followup_status" },
+        (payload) => applyRemoteStatus(payload.new)
+      )
+      .subscribe((status) => {
+        if (status === "SUBSCRIBED") {
+          setLiveStatus("vivo");
+          // Primera conexión: la carga inicial ya está en camino, no hay nada
+          // que recuperar. Re-conexión: hay que volver a traer la lista,
+          // porque los eventos del hueco no se reenvían.
+          if (yaEstuvoEnVivo.current) setReloadKey((k) => k + 1);
+          else yaEstuvoEnVivo.current = true;
+        } else if (status === "CHANNEL_ERROR" || status === "TIMED_OUT" || status === "CLOSED") {
+          setLiveStatus("caido");
+        } else {
+          setLiveStatus("conectando");
+        }
+      });
+
+    return () => { supabase.removeChannel(channel); };
+  }, [applyRemoteStatus]);
+
   const updateStatus = useCallback(async (conversationId, patch) => {
-    const prevRows = rawRows;
-    setRawRows((rows) => rows.map((r) => (r.id === conversationId ? { ...r, ...patch, actualizado_por: actor } : r)));
+    const prevRow = rawRows.find((r) => r.id === conversationId);
+    // El optimista incluye estado_actualizado_en para que el sello de la
+    // tarjeta diga "hace un momento" sin esperar el eco del realtime; cuando
+    // llega el evento se pisa con el updated_at real del trigger.
+    setRawRows((rows) => rows.map((r) => (
+      r.id === conversationId
+        ? { ...r, ...patch, actualizado_por: actor, estado_actualizado_en: new Date().toISOString() }
+        : r
+    )));
     setRowErrors((errs) => { const next = { ...errs }; delete next[conversationId]; return next; });
 
     const { error: upsertError } = await supabase
@@ -502,7 +726,10 @@ export function SeguimientoSection({ profile }) {
       .upsert({ conversation_id: conversationId, actualizado_por: actor, ...patch }, { onConflict: "conversation_id" });
 
     if (upsertError) {
-      setRawRows(prevRows);
+      // Rollback quirúrgico: se repone SOLO esta fila. Antes se restauraba el
+      // array entero, y con realtime encima eso borraría los cambios que
+      // otras personas hicieron mientras este upsert estaba en vuelo.
+      if (prevRow) setRawRows((rows) => rows.map((r) => (r.id === conversationId ? prevRow : r)));
       setRowErrors((errs) => ({ ...errs, [conversationId]: upsertError.message }));
     } else if (patch.estado) {
       loadKpis(from, to);
@@ -558,6 +785,15 @@ export function SeguimientoSection({ profile }) {
         procedimiento={procedimiento} setProcedimiento={setProcedimiento}
         search={search} setSearch={setSearch}
       />
+
+      <div style={{ display: "flex", justifyContent: "flex-end", alignItems: "center", gap: 12, marginBottom: 12 }}>
+        {refreshing && (
+          <span style={{ fontSize: 12, color: COLORS.textMuted, fontFamily: "'Manrope', sans-serif" }}>
+            Actualizando...
+          </span>
+        )}
+        <LiveIndicator status={liveStatus} onReload={() => setReloadKey((k) => k + 1)} />
+      </div>
 
       {error && <ErrorBanner>{error}</ErrorBanner>}
 
