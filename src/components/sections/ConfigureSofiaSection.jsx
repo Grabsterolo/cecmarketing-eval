@@ -4,6 +4,7 @@ import { COLORS } from "../../constants/colors.js";
 import { Card, CardHeader } from "../ui/Card.jsx";
 import { taStyle, btnSubmitStyle } from "../../styles/forms.js";
 import { supabase } from "../../lib/supabase.js";
+import { fetchApiAutenticado } from "../../lib/api.js";
 
 // El Worker procesa como máximo ~20 conversaciones por invocación (límite
 // de subrequests de Cloudflare — ver comentario en scanAndWarn). Cuando
@@ -23,17 +24,11 @@ function InactivityCleanupCard() {
   const [batchProgress, setBatchProgress] = useState(null);
 
   async function callCleanupScan(dryRun) {
-    const res = await fetch("/api/cleanup-scan", {
+    return await fetchApiAutenticado("/api/cleanup-scan", {
       method: "POST",
-      headers: {
-        "content-type": "application/json",
-        "x-sofia-secret": import.meta.env.VITE_SOFIA_SECRET,
-      },
+      headers: { "content-type": "application/json" },
       body: JSON.stringify({ dryRun }),
     });
-    const data = await res.json();
-    if (!res.ok || data.error) throw new Error(data.error || "Error desconocido");
-    return data;
   }
 
   async function runScan(dryRun) {
@@ -230,12 +225,7 @@ export function ConfigureSofiaSection() {
     setReindexing(true);
     setReindexResult(null);
     try {
-      const res = await fetch("/api/reindex", {
-        method: "POST",
-        headers: { "x-sofia-secret": import.meta.env.VITE_SOFIA_SECRET },
-      });
-      const data = await res.json();
-      if (!res.ok || data.error) throw new Error(data.error || "Error desconocido");
+      const data = await fetchApiAutenticado("/api/reindex", { method: "POST" });
       setReindexResult({ ok: true, chunks: data.chunks });
     } catch (err) {
       setReindexResult({ ok: false, message: err.message });

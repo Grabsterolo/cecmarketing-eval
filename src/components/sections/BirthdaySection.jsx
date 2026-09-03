@@ -3,6 +3,7 @@ import { Cake, Send } from "lucide-react";
 import { COLORS } from "../../constants/colors.js";
 import { Card, CardHeader } from "../ui/Card.jsx";
 import { Button } from "../ui/Button.jsx";
+import { fetchApiAutenticado } from "../../lib/api.js";
 
 const inputStyle = {
   width: "100%",
@@ -27,23 +28,15 @@ export function BirthdaySection() {
     setSending(true);
     setResult(null);
     try {
-      const res = await fetch("/api/send-birthday", {
+      await fetchApiAutenticado("/api/send-birthday", {
         method: "POST",
-        headers: {
-          "content-type": "application/json",
-          "x-sofia-secret": import.meta.env.VITE_SOFIA_SECRET,
-        },
+        headers: { "content-type": "application/json" },
         body: JSON.stringify({ phoneNumber: phoneNumber.trim() }),
       });
-      const data = await res.json();
-      if (!res.ok || data?.error) {
-        setResult({ ok: false, message: data?.error || "No se pudo enviar el mensaje." });
-        return;
-      }
       setResult({ ok: true, message: "Mensaje de cumpleaños enviado." });
       setPhoneNumber("");
     } catch (e) {
-      setResult({ ok: false, message: "Error al conectar con el servidor." });
+      setResult({ ok: false, message: e.message || "Error al conectar con el servidor." });
     } finally {
       setSending(false);
     }

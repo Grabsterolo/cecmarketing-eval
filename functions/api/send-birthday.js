@@ -3,13 +3,14 @@
 // SOFIA_WORKER_SEND_SECRET (el x-send-secret que el Worker exige) nunca se
 // exponga al cliente — a diferencia de VITE_SOFIA_SECRET en chat.js, este
 // endpoint dispara un envío real de WhatsApp, no solo una prueba de chat.
+import { exigirSesion } from "./_auth.js";
+
 export async function onRequestPost({ request, env }) {
-  if (request.headers.get("x-sofia-secret") !== env.SOFIA_CHAT_SECRET) {
-    return new Response(JSON.stringify({ error: "Unauthorized" }), {
-      status: 401,
-      headers: { "content-type": "application/json" },
-    });
-  }
+  // Solo el dashboard llama acá, siempre con un usuario logueado detrás.
+  // Antes esto se protegía con x-sofia-secret, que es público por
+  // construcción — ver el encabezado de _auth.js.
+  const noAutorizado = await exigirSesion(env, request);
+  if (noAutorizado) return noAutorizado;
 
   const { SOFIA_WORKER_URL, SOFIA_WORKER_SEND_SECRET } = env;
 

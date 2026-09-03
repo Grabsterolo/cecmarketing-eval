@@ -1,13 +1,15 @@
 // Intermediate Pages Function so the dashboard's frontend never sees
-// CLEANUP_TRIGGER_SECRET (the credential that talks to the Worker) — it
-// only needs the same VITE_SOFIA_SECRET already used for /api/chat.
+// CLEANUP_TRIGGER_SECRET (the credential that talks to the Worker). Desde el
+// 2026-09-03 exige la sesión de Supabase de quien llama, no el viejo
+// VITE_SOFIA_SECRET — ese viajaba en el bundle público (ver _auth.js).
+import { exigirSesion } from "./_auth.js";
+
 export async function onRequestPost({ request, env }) {
-  if (request.headers.get("x-sofia-secret") !== env.SOFIA_CHAT_SECRET) {
-    return new Response(JSON.stringify({ error: "Unauthorized" }), {
-      status: 401,
-      headers: { "content-type": "application/json" },
-    });
-  }
+  // Solo el dashboard llama acá, siempre con un usuario logueado detrás.
+  // Antes esto se protegía con x-sofia-secret, que es público por
+  // construcción — ver el encabezado de _auth.js.
+  const noAutorizado = await exigirSesion(env, request);
+  if (noAutorizado) return noAutorizado;
 
   const { dryRun } = await request.json();
 

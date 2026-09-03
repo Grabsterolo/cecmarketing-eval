@@ -8,6 +8,8 @@
 // de texto, sin fallback de escalación, sin detección de traspaso implícito,
 // sin limpiar [CERRAR], y modelo distinto).
 
+import { callerIsAuthenticated } from "./_auth.js";
+
 const RETRY_DELAYS_MS = [400, 900];
 
 function sleep(ms) {
@@ -114,39 +116,20 @@ async function callClaudeWithRetry(env, systemBlocks, claudeMessages) {
 
 // De quién se acepta el prompt de Sofía.
 //
-// Hasta el 2026-09-03 este endpoint tomaba `system` y `knowledge_base` del
-// cuerpo de la petición viniera de donde viniera. El único candado es
-// x-sofia-secret, y ese valor sale de VITE_SOFIA_SECRET, que se compila
-// dentro del bundle público — o sea que es de dominio público. La
-// consecuencia no era solo "alguien puede hablar con Sofía": era que
-// cualquiera podía mandar SUS PROPIAS instrucciones y usar la cuenta de
-// Anthropic del CEC como un Claude de propósito general, con el prompt que
-// quisiera y a costa del CEC. Ver auditoría 2026-09-03 sección H.
+// Este endpoint es el único de functions/api/ que NO puede exigir sesión: lo
+// llama también el widget público /sofia, donde el visitante es anónimo por
+// diseño. Los otros cinco sí la exigen desde el 2026-09-03 (ver _auth.js).
 //
-// Ahora esos dos campos solo se respetan si quien llama trae el access_token
-// de un usuario logueado en el dashboard — que es exactamente el caso de
-// "Probar a Sofía", donde el punto es probar un prompt antes de guardarlo.
-// El widget público (SofiaPublic) nunca los mandó — manda solo `messages` —
-// así que para el visitante del sitio no cambia nada.
+// Lo que sí se cerró acá: hasta esa fecha tomaba `system` y `knowledge_base`
+// del cuerpo de la petición viniera de donde viniera, y como el único candado
+// era x-sofia-secret —que se compila en el bundle público— cualquiera podía
+// mandar SUS PROPIAS instrucciones y usar la cuenta de Anthropic del CEC como
+// un Claude de propósito general. Ahora esos dos campos solo se respetan si
+// quien llama trae la sesión de un usuario del dashboard, que es el caso de
+// "Probar a Sofía". El widget público nunca los mandó — manda solo `messages`.
 //
-// Mismo patrón de verificación que callerIsAuthenticated() en
-// functions/api/meta-metrics.js.
-async function callerIsAuthenticated(env, accessToken) {
-  if (!accessToken) return false;
-  try {
-    const res = await fetch(`${env.SUPABASE_URL}/auth/v1/user`, {
-      headers: {
-        apikey: env.SUPABASE_SERVICE_ROLE_KEY,
-        Authorization: `Bearer ${accessToken}`,
-      },
-    });
-    if (!res.ok) return false;
-    const user = await res.json();
-    return Boolean(user?.id);
-  } catch {
-    return false;
-  }
-}
+// PENDIENTE: el camino anónimo sigue abierto y sin techo de gasto. Eso lo
+// cierra Turnstile más un límite de tasa, no la autenticación.
 
 export async function onRequestPost({ request, env }) {
   if (request.headers.get("x-sofia-secret") !== env.SOFIA_CHAT_SECRET) {
@@ -161,8 +144,7 @@ export async function onRequestPost({ request, env }) {
   // Solo se consulta a Supabase cuando el cliente realmente mandó un prompt
   // propio; el widget público no paga ese viaje extra en cada mensaje.
   const clientSentPrompt = Boolean(systemFromClient || kbFromClient);
-  const accessToken = (request.headers.get("authorization") || "").replace(/^Bearer\s+/i, "");
-  const clientPromptTrusted = clientSentPrompt && await callerIsAuthenticated(env, accessToken);
+  const clientPromptTrusted = clientSentPrompt && await callerIsAuthenticated(env, request);
 
   let system = clientPromptTrusted ? systemFromClient : null;
   let knowledge_base = clientPromptTrusted ? kbFromClient : null;
