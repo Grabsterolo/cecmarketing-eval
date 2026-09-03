@@ -84,9 +84,9 @@ Mismo flujo que tus otros proyectos: conectar este repo a Cloudflare Pages, conf
 Login, dashboard, sidebar y "Configurar a Sofía" contra Supabase.
 
 **Fase 2 — Conversaciones de Sofía** *(hecho)*
-`sofia_conversations` recibe datos del Worker desde el 2026-07-26. Hoy son
-~9.200 conversaciones reales, repartidas en Métricas Sofía, Leads
-Potenciales, Seguimiento y Pacientes.
+`sofia_conversations` recibe datos del Worker desde el 2026-07-26. Al
+2026-09-03 son **10.983** conversaciones reales, repartidas en Métricas
+Sofía, Leads Potenciales, Seguimiento y Pacientes.
 
 **Fase 3 — Conectar Meta y Google** *(hecho — Meta en vivo; Google se retiró)*
 `MetricsSection.jsx` ("Métricas Meta" en el nav) corre con datos reales de Meta Ads, sin mock data (CPL, gráfico gasto vs leads, insight automático). Google Ads/Analytics se integró primero (commit `8da8f0b`) pero se quitó del dashboard por decisión de producto — "resultó poco práctico" (commit `2039363`), no por falta de acceso. `DATA_SOURCES` en `nav.js` solo lista `meta` y `sofia`, ambos `connected: true`.
@@ -94,10 +94,19 @@ Potenciales, Seguimiento y Pacientes.
 **Fase 4 — Motor de recomendaciones** *(hecho)*
 `RecommendationsSection.jsx` ya no es placeholder: muestra el análisis diario real de la tabla `sofia_recommendations`, generado por la función `daily-analysis`, que cruza el gasto/leads de Meta con los temas de conversación de Sofía (commit `2c6f093`, "cruzar Meta Ads con conversaciones de Sofía en el reporte diario").
 
-## Estado al 2026-08-27 — leer esto primero
+## Estado del sistema — leer esto primero
 
 Foto completa del sistema. Si abrís una sesión nueva, esto es lo que hay que
-saber antes de tocar nada.
+saber antes de tocar nada. Escrita el 2026-08-27; las cifras se reverificaron
+contra la base el 2026-09-03.
+
+### Auditorías (viven en `docs/`, no estaban enlazadas desde acá)
+
+| Archivo | Qué cubre |
+|---|---|
+| `AUDITORIA_2026-08-30.html` | Veracidad de las métricas del dashboard. Ninguna cifra inventada, pero varias no medían lo que su etiqueta decía. Origen del hallazgo de `VITE_SOFIA_SECRET`. |
+| `AUDITORIA_RAG_CACHING_2026-09-03.html` | Búsqueda semántica y prompt caching de Sofía, medidos contra el índice y el tráfico reales. |
+| `DATA_AUDIT.md` | Rastreo de cada métrica hasta su origen. |
 
 ### Las tres piezas y cómo se despliega cada una
 
@@ -167,6 +176,28 @@ teléfonos en claro. **Los dos hallazgos de nivel ERROR quedaron cerrados**
 
 **Lo que sigue abierto, y necesita a una persona:**
 
+0. **`VITE_SOFIA_SECRET` viaja en el bundle público.** Seis funciones de
+   `functions/api/` (`chat`, `send-birthday`, `reindex`, `daily-analysis`,
+   `audit-sofia`, `cleanup-scan`) se protegen con el header
+   `x-sofia-secret`, cuyo valor sale de `VITE_SOFIA_SECRET` — y **toda
+   variable `VITE_*` se compila dentro del JavaScript que sirve el
+   navegador.** No es un candado: es un valor público. Hallazgo de la
+   auditoría del 2026-08-30 (sección L), que faltaba en esta lista.
+
+   Cualquiera con el bundle puede disparar envíos reales de WhatsApp,
+   reescribir los embeddings de la base de conocimiento, y consumir las
+   cuentas de Anthropic y OpenAI del CEC.
+
+   **Mitigado a medias el 2026-09-03:** `chat.js` ya no acepta un `system`
+   ni un `knowledge_base` del cliente salvo que traiga el `access_token` de
+   un usuario logueado, así que el endpoint dejó de ser un Claude de
+   propósito general a costa del CEC. Lo que falta —y es lo que cierra la
+   puerta— es migrar las seis funciones al patrón de token de sesión que ya
+   usan `meta-metrics.js` y `admin-users.js`, poner Turnstile y un límite de
+   tasa en el widget público (que no tiene usuario a quien autenticar), y
+   **recién entonces** rotar `SOFIA_CHAT_SECRET`. Ese orden importa: rotar
+   antes rompe los seis endpoints del dashboard de una vez.
+
 1. **Rotar `STATS_TRIGGER_SECRET`.** El valor actual se manejó en texto plano
    y es débil. Es lo único que protege `GET /stats/prospect-phones`, un
    endpoint público que devuelve **miles de teléfonos de pacientes**. Rotarlo
@@ -175,8 +206,15 @@ teléfonos en claro. **Los dos hallazgos de nivel ERROR quedaron cerrados**
 2. **Confirmar que el registro público esté deshabilitado** en Supabase Auth.
    La política de `sofia_conversations` es `auth.role() = 'authenticated'`:
    **no filtra por usuario ni por rol**, así que cualquier cuenta creada en
-   ese proyecto vería los 3.374 teléfonos. Hoy hay 2 usuarios y el último
-   registro es de junio, así que en la práctica está contenido.
+   ese proyecto vería todos los teléfonos.
+
+   ⚠️ **El atenuante que decía esta sección caducó.** Hasta el 2026-08-27
+   decía "hoy hay 2 usuarios y el último registro es de junio, así que en la
+   práctica está contenido". Verificado contra la base el 2026-09-03: son
+   **6 usuarios** y el último registro es del **2026-09-02**. Y ya no son
+   3.374 teléfonos sino **5.277 distintos**, sobre 5.281 conversaciones que
+   lo traen. La exposición creció y la razón por la que se consideraba
+   contenida ya no aplica.
 3. **Activar la protección de contraseñas filtradas** (WARN del linter).
 4. **La definición legal** — Ley 8968 y las restricciones de Meta sobre datos
    de salud. Ya no es teórico: la base con los teléfonos existe.
@@ -288,6 +326,28 @@ local, no un bug. Para probar el build de producción hay una config
 
 ## Notas para sesiones futuras
 
+**2026-09-03 — Auditoría del RAG y el prompt caching, y el candado del prompt.**
+Informe completo en `docs/AUDITORIA_RAG_CACHING_2026-09-03.html`. Lo que hay
+que saber sin abrirlo:
+
+- **El caching está bien hecho** y conviene no romperlo en un refactor: la
+  hora va fuera del prefijo cacheado, el bloque `system` es idéntico en las
+  dos ramas, y el TTL de 1 h está justificado por el patrón de tráfico real
+  (~$101/mes mejor que el de 5 min). Confirmado en producción el mismo día
+  con los primeros mensajes reales: 103.682 tokens de lectura de caché y
+  **cero escrituras**. El `console.log` de `usage` que se agregó es lo único
+  que avisaría si eso se rompe.
+- **El umbral del RAG pasó de 0,3 a 0,45**, medido sobre 180 consultas
+  reconstruidas de conversaciones reales. Con 0,3, el 27% del contexto que
+  se le inyectaba a Sofía eran fragmentos sin relación con la pregunta.
+- **`chat.js` ya no acepta el prompt del cliente sin sesión** (ver punto 0
+  de Seguridad).
+- ⚠️ **Todo cambio al comportamiento de Sofía va en DOS repos.** `chat.js`
+  solo atiende el widget público y "Probar a Sofía"; los ~17.300 mensajes de
+  paciente al mes pasan por el Worker `cec-sofia-whatsapp`, que es un espejo
+  deliberado de ese archivo. Arreglar solo uno no cambia nada para los
+  pacientes. Los tres cambios de esta fecha se aplicaron en ambos.
+
 **2026-08-30 — Sección Configuración: usuarios, roles y módulos.**
 Nueva sección (solo visible para `role = 'admin'`) para crear usuarios del
 dashboard, decidir si son admin o no, y qué módulos del menú ven. Piezas:
@@ -382,8 +442,11 @@ tocar `processInboundMessage()` o la deduplicación de interacciones.
 
 - **Automatizar las migraciones.** El SQL ya está en `supabase/migrations/`,
   pero no hay CLI ni CI que lo aplique, y `schema.sql` sigue desactualizado.
+- **Cerrar los endpoints protegidos con `VITE_SOFIA_SECRET`** (ver punto 0 de
+  "Seguridad" más arriba). Es lo más urgente: ese secreto es público por
+  construcción.
 - **Rotar `STATS_TRIGGER_SECRET`** y decidir si `/stats/prospect-phones` debe
-  seguir existiendo (ver "Seguridad" más arriba). Es lo más urgente.
+  seguir existiendo (ver "Seguridad" más arriba).
 - **Confirmar que el registro público esté cerrado** en Supabase Auth.
 - **El tope de 5.000 de Zenvia.** Afecta dos cosas: la conversión sale
   subcontada (`/stats/conversion` ya devuelve `truncated: true`, y se
