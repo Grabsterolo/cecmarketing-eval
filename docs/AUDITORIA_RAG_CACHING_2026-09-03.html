@@ -1,0 +1,523 @@
+<title>El RAG de Sofía a examen</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@500;600;700&family=Manrope:wght@400;500;600;700;800&display=swap">
+<style>
+:root{
+  --verde:#1F4A40; --verde-claro:#2F6B5C; --dorado:#C9A24E; --dorado-suave:#F3E7CC;
+  --ground:#FAFAF8; --panel:#FFFFFF; --panel-alt:#F3F5F2;
+  --texto:#1B2420; --muted:#5F6F69; --borde:#E2E6E1; --borde-fuerte:#CBD3CE;
+  --crit:#9B2C2C; --crit-bg:#FBEBEB; --crit-bd:#EFC9C9;
+  --warn:#A45B00; --warn-bg:#FDF3E2; --warn-bd:#EFD8AE;
+  --ok:#2F6B4F; --ok-bg:#E9F3ED; --ok-bd:#C3DCCD;
+  --info:#3C5A79; --info-bg:#EAF0F6; --info-bd:#C7D6E4;
+  --serif:'Cormorant Garamond',Georgia,serif;
+  --sans:'Manrope',-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;
+}
+@media (prefers-color-scheme:dark){
+  :root:not([data-theme="light"]){
+    --ground:#0E1512; --panel:#152019; --panel-alt:#1B2721;
+    --texto:#E8EDE9; --muted:#9BAAA3; --borde:#26332C; --borde-fuerte:#35443C;
+    --verde:#7FB8A4; --verde-claro:#A5CFC0; --dorado:#D9B76A; --dorado-suave:#3A3121;
+    --crit:#F0918D; --crit-bg:#2E1817; --crit-bd:#4D2523;
+    --warn:#E0AE63; --warn-bg:#2C2114; --warn-bd:#4A3820;
+    --ok:#7FC79E; --ok-bg:#152619; --ok-bd:#27442F;
+    --info:#9BBBD9; --info-bg:#16202B; --info-bd:#2A3B4D;
+  }
+}
+:root[data-theme="dark"]{
+  --ground:#0E1512; --panel:#152019; --panel-alt:#1B2721;
+  --texto:#E8EDE9; --muted:#9BAAA3; --borde:#26332C; --borde-fuerte:#35443C;
+  --verde:#7FB8A4; --verde-claro:#A5CFC0; --dorado:#D9B76A; --dorado-suave:#3A3121;
+  --crit:#F0918D; --crit-bg:#2E1817; --crit-bd:#4D2523;
+  --warn:#E0AE63; --warn-bg:#2C2114; --warn-bd:#4A3820;
+  --ok:#7FC79E; --ok-bg:#152619; --ok-bd:#27442F;
+  --info:#9BBBD9; --info-bg:#16202B; --info-bd:#2A3B4D;
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--ground);color:var(--texto);font-family:var(--sans);font-size:15.5px;line-height:1.65;-webkit-font-smoothing:antialiased}
+.wrap{max-width:920px;margin:0 auto;padding:56px 28px 100px}
+h1,h2,h3{text-wrap:balance;margin:0}
+.eyebrow{font-size:11px;letter-spacing:.22em;text-transform:uppercase;font-weight:700;color:var(--dorado);margin:0 0 10px}
+h1{font-family:var(--serif);font-size:clamp(38px,6vw,58px);font-weight:600;line-height:1.05;color:var(--verde);letter-spacing:-.01em}
+.sub{color:var(--muted);font-size:16px;margin:14px 0 0;max-width:62ch}
+.rule{height:1px;background:var(--borde);border:0;margin:44px 0}
+section{margin:0 0 12px;scroll-margin-top:20px}
+h2{font-family:var(--serif);font-size:31px;font-weight:600;color:var(--verde);margin:52px 0 6px;display:flex;align-items:baseline;gap:12px}
+h2 .ltr{font-family:var(--sans);font-size:11px;font-weight:800;letter-spacing:.16em;color:var(--dorado);border:1px solid var(--borde-fuerte);border-radius:5px;padding:3px 7px;flex:none;transform:translateY(-4px)}
+h3{font-family:var(--sans);font-size:15px;font-weight:800;color:var(--texto);margin:30px 0 8px;letter-spacing:-.005em}
+p{margin:12px 0;max-width:68ch}
+ul,ol{margin:12px 0;padding-left:22px;max-width:68ch}
+li{margin:7px 0}
+code{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:.86em;background:var(--panel-alt);border:1px solid var(--borde);border-radius:4px;padding:1px 5px}
+strong{font-weight:700}
+a{color:var(--verde);text-decoration-color:var(--borde-fuerte);text-underline-offset:3px}
+a:focus-visible{outline:2px solid var(--dorado);outline-offset:2px;border-radius:3px}
+
+.score{display:grid;grid-template-columns:auto 1fr;gap:30px;align-items:center;background:var(--panel);border:1px solid var(--borde);border-radius:14px;padding:26px 28px;margin:32px 0 0}
+.dial{width:132px;height:132px;flex:none;position:relative}
+.dial svg{transform:rotate(-90deg)}
+.dial .val{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;line-height:1}
+.dial .n{font-size:34px;font-weight:800;color:var(--verde);font-variant-numeric:tabular-nums}
+.dial .d{font-size:10.5px;letter-spacing:.14em;text-transform:uppercase;color:var(--muted);font-weight:700;margin-top:5px;text-align:center;padding:0 8px}
+.deltas{display:flex;flex-wrap:wrap;gap:10px;margin:14px 0 0}
+.pill{font-size:12px;font-weight:700;padding:4px 11px;border-radius:999px;border:1px solid;font-variant-numeric:tabular-nums}
+.p-crit{color:var(--crit);background:var(--crit-bg);border-color:var(--crit-bd)}
+.p-warn{color:var(--warn);background:var(--warn-bg);border-color:var(--warn-bd)}
+.p-ok{color:var(--ok);background:var(--ok-bg);border-color:var(--ok-bd)}
+.p-info{color:var(--info);background:var(--info-bg);border-color:var(--info-bd)}
+
+.find{border:1px solid var(--borde);border-left:3px solid var(--borde-fuerte);border-radius:10px;background:var(--panel);padding:18px 20px;margin:14px 0}
+.find.c1{border-left-color:var(--crit)}
+.find.c2{border-left-color:var(--warn)}
+.find.c3{border-left-color:var(--info)}
+.find.c4{border-left-color:var(--ok)}
+.find h4{margin:0 0 4px;font-size:15.5px;font-weight:800;display:flex;gap:10px;align-items:baseline;flex-wrap:wrap}
+.tag{font-size:10px;font-weight:800;letter-spacing:.1em;text-transform:uppercase;padding:2px 7px;border-radius:4px;border:1px solid;flex:none}
+.t-crit{color:var(--crit);background:var(--crit-bg);border-color:var(--crit-bd)}
+.t-warn{color:var(--warn);background:var(--warn-bg);border-color:var(--warn-bd)}
+.t-info{color:var(--info);background:var(--info-bg);border-color:var(--info-bd)}
+.t-ok{color:var(--ok);background:var(--ok-bg);border-color:var(--ok-bd)}
+.find p{margin:8px 0 0;font-size:14px;max-width:none}
+.find .ev{margin-top:10px;font-size:13px;color:var(--muted);border-top:1px dashed var(--borde);padding-top:9px}
+
+.tw{overflow-x:auto;margin:18px 0;border:1px solid var(--borde);border-radius:10px;background:var(--panel)}
+table{border-collapse:collapse;width:100%;min-width:620px;font-size:13.5px}
+th{text-align:left;font-size:10.5px;letter-spacing:.1em;text-transform:uppercase;color:var(--muted);font-weight:800;padding:12px 14px;border-bottom:1px solid var(--borde-fuerte);white-space:nowrap;background:var(--panel-alt)}
+td{padding:11px 14px;border-bottom:1px solid var(--borde);vertical-align:top}
+tbody tr:last-child td{border-bottom:0}
+td.num{text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}
+.lvl{font-weight:800;white-space:nowrap;font-size:12.5px}
+.l-verde{color:var(--ok)} .l-amar{color:var(--warn)} .l-rojo{color:var(--crit)}
+
+/* Barras de similitud */
+.simchart{border:1px solid var(--borde);border-radius:10px;background:var(--panel);padding:20px 22px;margin:20px 0}
+.simrow{display:grid;grid-template-columns:minmax(0,15rem) 1fr auto;gap:12px;align-items:center;padding:4px 0}
+.simrow .q{font-size:12.5px;color:var(--texto);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.track{position:relative;height:13px;background:var(--panel-alt);border:1px solid var(--borde);border-radius:3px;overflow:hidden}
+.bar{position:absolute;left:0;top:0;bottom:0;border-radius:2px}
+.b-noise{background:var(--crit)}
+.b-mid{background:var(--dorado)}
+.b-good{background:var(--verde-claro)}
+.simrow .v{font-size:12px;font-weight:800;font-variant-numeric:tabular-nums;color:var(--muted);min-width:3.2em;text-align:right}
+.simrow.axisrow{padding-top:6px}
+.axis{position:relative;height:20px;border-top:1px solid var(--borde-fuerte)}
+.axis span{position:absolute;top:3px;transform:translateX(-50%);font-size:10px;color:var(--muted);font-weight:700;font-variant-numeric:tabular-nums;white-space:nowrap}
+.axis span.thr{position:absolute;top:-30px;bottom:14px;width:0;transform:none;border-left:2px dashed var(--crit-bd)}
+.legend{display:flex;flex-wrap:wrap;gap:16px;margin:16px 0 0;font-size:11.5px;color:var(--muted);font-weight:700}
+.legend i{display:inline-block;width:11px;height:11px;border-radius:2px;margin-right:6px;vertical-align:-1px}
+
+/* Comparativa de costo */
+.costs{display:flex;flex-direction:column;gap:10px;margin:20px 0}
+.crow{display:grid;grid-template-columns:minmax(0,13rem) 1fr auto;gap:14px;align-items:center;padding:13px 16px;border:1px solid var(--borde);border-radius:9px;background:var(--panel)}
+.crow.best{border-color:var(--ok-bd);background:var(--ok-bg)}
+.crow .lbl{font-weight:700;font-size:13.5px}
+.crow .st{font-size:11.5px;color:var(--muted);margin-top:2px;font-weight:500}
+.crow .v{font-variant-numeric:tabular-nums;font-weight:800;font-size:16px;white-space:nowrap}
+.cbar{height:10px;background:var(--panel-alt);border:1px solid var(--borde);border-radius:3px;overflow:hidden;position:relative}
+.cbar i{position:absolute;left:0;top:0;bottom:0;background:var(--verde-claro);border-radius:2px}
+.crow.best .cbar i{background:var(--ok)}
+
+.phase{border:1px solid var(--borde);border-radius:10px;background:var(--panel);padding:18px 20px;margin:14px 0}
+.phase .when{font-size:10.5px;letter-spacing:.16em;text-transform:uppercase;font-weight:800;color:var(--dorado);margin:0 0 8px}
+.phase ol{margin:0;padding-left:20px}
+.note{background:var(--panel-alt);border:1px solid var(--borde);border-radius:10px;padding:16px 20px;margin:20px 0;font-size:14px}
+.note p{max-width:none}
+pre{background:var(--panel-alt);border:1px solid var(--borde);border-radius:8px;padding:14px 16px;overflow-x:auto;font-size:12.5px;line-height:1.6;margin:14px 0}
+pre code{background:none;border:0;padding:0;font-size:inherit}
+@media (max-width:640px){
+  .wrap{padding:36px 18px 70px}
+  .score{grid-template-columns:1fr;gap:20px;justify-items:center;text-align:center}
+  h2{font-size:26px}
+  .simrow{grid-template-columns:1fr auto}
+  .simrow .q{grid-column:1/-1}
+  .axis{margin-left:0}
+  .crow{grid-template-columns:1fr auto}
+  .cbar{grid-column:1/-1}
+}
+@media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
+</style>
+
+<div class="wrap">
+
+<p class="eyebrow">Auditoría técnica · 3 de septiembre de 2026</p>
+<h1>El RAG de Sofía a examen</h1>
+<p class="sub">Búsqueda semántica y prompt caching, medidos contra la base de producción y contra el índice real de 104 fragmentos — no contra lo que dicen los comentarios del código.</p>
+
+<section id="a">
+<h2><span class="ltr">A</span> Resumen ejecutivo</h2>
+
+<div class="score">
+  <div class="dial">
+    <svg width="132" height="132" viewBox="0 0 132 132" aria-hidden="true">
+      <circle cx="66" cy="66" r="57" fill="none" stroke="var(--borde)" stroke-width="13"/>
+      <circle cx="66" cy="66" r="57" fill="none" stroke="var(--dorado)" stroke-width="13" stroke-linecap="round"
+              stroke-dasharray="358" stroke-dashoffset="118"/>
+    </svg>
+    <div class="val"><span class="n">67</span><span class="d">de 100</span></div>
+  </div>
+  <div>
+    <h3 style="margin-top:0">El caching está bien hecho. El RAG es el que no se está ganando su lugar.</h3>
+    <p style="font-size:14.5px;margin-top:6px">Las dos piezas están funcionando: no hay nada roto ni caído. Pero se llevan notas muy distintas. <strong>El prompt caching está bien diseñado y la decisión de TTL a 1 hora es correcta</strong> — la validé contra el patrón de tráfico real y ahorra unos <strong>$100 al mes</strong> frente a la alternativa de 5 minutos.</p>
+    <p style="font-size:14.5px">El RAG es otra historia. Medido contra 20 consultas reales de paciente, <strong>en 7 de 20 lo que recupera es ruido</strong>: fragmentos con similitud de 0,30–0,39 que no responden la pregunta y que, al devolver algo, apagan el respaldo que sí la habría respondido. Y todo ese aparato — OpenAI, embeddings, re-indexado, ~300 ms extra por mensaje — está ahorrando alrededor de <strong>$30 al mes</strong>.</p>
+    <div class="deltas">
+      <span class="pill p-crit">2 críticos</span>
+      <span class="pill p-warn">5 altos</span>
+      <span class="pill p-info">6 medios</span>
+      <span class="pill p-ok">3 confirmados correctos</span>
+    </div>
+  </div>
+</div>
+
+<h3>Los tres titulares</h3>
+<ol>
+  <li><strong>El umbral de 0,3 está dentro de la banda de ruido.</strong> El comentario del código lo justifica con una medición del corpus equivocada (fragmento contra fragmento, cuando lo que importa es consulta contra fragmento) y además lo mueve en la dirección contraria a la que el propio commit dice buscar. Subirlo a ~0,45 es el arreglo de mayor impacto y menor riesgo del informe.</li>
+  <li><strong>El RAG ahorra ~$30/mes y cuesta ~300 ms por mensaje.</strong> Porque la base de conocimiento completa va cacheada a $0,20/MTok y los fragmentos del RAG van <em>sin</em> cachear a $2,00/MTok, mandar los 104 fragmentos enteros cuesta apenas el doble que mandar los 6 recuperados. El RAG no es la palanca de costo que parece.</li>
+  <li><strong>Dos endpoints tienen <code>cache_control</code> que nunca cachea.</strong> <code>daily-analysis</code> y <code>audit-sofia</code> marcan un bloque de 72 y 86 tokens; el mínimo cacheable de ese modelo es 1.024. No falla, no avisa: simplemente no hace nada. Da la ilusión de estar optimizado.</li>
+</ol>
+
+<div class="note">
+<p><strong>Alcance y de dónde salen los números.</strong> <code>functions/api/chat.js</code> atiende el widget público y «Probar a Sofía». El volumen real de WhatsApp pasa por el Worker <code>cec-sofia-whatsapp</code>, que es un espejo deliberado de este archivo (así lo dice su encabezado). Las cifras de dinero proyectan los <strong>17.337 mensajes de los últimos 30 días</strong> sobre esta lógica. Los tokens están estimados a 3,6 caracteres por token; la tasa de acierto del RAG sale de una muestra de 20 consultas. Son estimaciones de orden de magnitud, no facturación.</p>
+</div>
+</section>
+
+<hr class="rule">
+
+<section id="b">
+<h2><span class="ltr">B</span> Qué recupera el RAG, medido</h2>
+
+<p>Embebí 20 consultas escritas como las escribe un paciente por WhatsApp y las corrí contra el índice de producción con los parámetros actuales (<code>match_count: 6</code>, <code>match_threshold: 0.3</code>). La barra es la similitud del <em>mejor</em> resultado: qué tan cerca está el fragmento más parecido de la pregunta.</p>
+
+<div class="simchart">
+  <div class="simrow"><span class="q">cuánto dura la recuperación de un aumento de senos</span><span class="track"><i class="bar b-good" style="width:63.2%"></i></span><span class="v">0,63</span></div>
+  <div class="simrow"><span class="q">hacen botox y rellenos?</span><span class="track"><i class="bar b-good" style="width:60.1%"></i></span><span class="v">0,60</span></div>
+  <div class="simrow"><span class="q">limpieza facial cuanto sale</span><span class="track"><i class="bar b-good" style="width:59.7%"></i></span><span class="v">0,60</span></div>
+  <div class="simrow"><span class="q">cuánto cuesta la lipo</span><span class="track"><i class="bar b-good" style="width:58.7%"></i></span><span class="v">0,59</span></div>
+  <div class="simrow"><span class="q">necesito depilación láser en las piernas</span><span class="track"><i class="bar b-good" style="width:57.8%"></i></span><span class="v">0,58</span></div>
+  <div class="simrow"><span class="q">mi mamá quiere un lifting facial, es muy mayor?</span><span class="track"><i class="bar b-good" style="width:57.8%"></i></span><span class="v">0,58</span></div>
+  <div class="simrow"><span class="q">cuanto vale una abdominoplastia</span><span class="track"><i class="bar b-good" style="width:56.9%"></i></span><span class="v">0,57</span></div>
+  <div class="simrow"><span class="q">tienen promociones este mes?</span><span class="track"><i class="bar b-good" style="width:56.7%"></i></span><span class="v">0,57</span></div>
+  <div class="simrow"><span class="q">quiero agendar una cita de valoración</span><span class="track"><i class="bar b-good" style="width:53.8%"></i></span><span class="v">0,54</span></div>
+  <div class="simrow"><span class="q">quién es el doctor que opera</span><span class="track"><i class="bar b-good" style="width:51.3%"></i></span><span class="v">0,51</span></div>
+  <div class="simrow"><span class="q">me hice una cirugía hace 3 días y tengo fiebre</span><span class="track"><i class="bar b-mid" style="width:45.5%"></i></span><span class="v">0,46</span></div>
+  <div class="simrow"><span class="q">precio</span><span class="track"><i class="bar b-noise" style="width:38.7%"></i></span><span class="v">0,39</span></div>
+  <div class="simrow"><span class="q">dónde están ubicados y cuál es el horario</span><span class="track"><i class="bar b-noise" style="width:36.8%"></i></span><span class="v">0,37</span></div>
+  <div class="simrow"><span class="q">aceptan tarjeta o dan financiamiento?</span><span class="track"><i class="bar b-noise" style="width:36.6%"></i></span><span class="v">0,37</span></div>
+  <div class="simrow"><span class="q">puedo pagar en dolares</span><span class="track"><i class="bar b-noise" style="width:34.3%"></i></span><span class="v">0,34</span></div>
+  <div class="simrow"><span class="q">quiero bajar de peso, qué me recomiendan</span><span class="track"><i class="bar b-noise" style="width:33.0%"></i></span><span class="v">0,33</span></div>
+  <div class="simrow"><span class="q">buenas</span><span class="track"><i class="bar b-noise" style="width:31.6%"></i></span><span class="v">0,32</span></div>
+  <div class="simrow"><span class="q">info <span style="color:var(--muted)">→ sin resultados</span></span><span class="track"><i class="bar b-noise" style="width:27.6%"></i></span><span class="v">0,28</span></div>
+  <div class="simrow"><span class="q">estoy buscando trabajo, tienen vacantes? <span style="color:var(--muted)">→ sin resultados</span></span><span class="track"><i class="bar b-noise" style="width:26.8%"></i></span><span class="v">0,27</span></div>
+  <div class="simrow"><span class="q">hola <span style="color:var(--muted)">→ sin resultados</span></span><span class="track"><i class="bar b-noise" style="width:26.3%"></i></span><span class="v">0,26</span></div>
+  <div class="simrow axisrow">
+    <span></span>
+    <span class="axis">
+      <span style="left:0%">0,00</span>
+      <span style="left:30%">0,30</span>
+      <span style="left:45%">0,45</span>
+      <span style="left:70%">0,70</span>
+      <span style="left:100%">1,00</span>
+      <span class="thr" style="left:30%"></span>
+    </span>
+    <span class="v" style="visibility:hidden">0,00</span>
+  </div>
+  <div class="legend">
+    <span><i style="background:var(--verde-claro)"></i>Recuperación buena (&gt; 0,50)</span>
+    <span><i style="background:var(--dorado)"></i>Aceptable (0,40 – 0,50)</span>
+    <span><i style="background:var(--crit)"></i>Ruido (&lt; 0,40)</span>
+    <span>· · · umbral actual, 0,30</span>
+  </div>
+</div>
+
+<h3>Lo que se lee en ese gráfico</h3>
+<p>Hay un corte muy limpio. <strong>Cuando el paciente nombra un procedimiento, el RAG acierta y acierta bien</strong> — «aumento de senos», «botox», «abdominoplastia», «depilación láser» traen el fragmento correcto en primer lugar, con márgenes cómodos. Esa mitad del gráfico funciona y no hay que tocarla.</p>
+<p>La otra mitad es el problema, y no es aleatoria: <strong>son justamente las preguntas operativas</strong> — precio en general, ubicación, horario, formas de pago, financiamiento. Ahí el mejor resultado ronda 0,33–0,39, que es indistinguible del azar, y sin embargo el umbral de 0,30 lo deja pasar. Ejemplos concretos de lo que Sofía recibe:</p>
+<ul>
+  <li><strong>«aceptan tarjeta o dan financiamiento?»</strong> → el primer resultado es <em>«Políticas de los paquetes especiales»</em> (0,37). El fragmento que realmente contesta, <em>«7. Precios y pagos»</em>, aparece en la <strong>sexta</strong> posición con 0,32, a un pelo de quedar fuera.</li>
+  <li><strong>«quiero bajar de peso, qué me recomiendan»</strong> → los 6 resultados son cirugías (lipo, abdominoplastia, Mommy Makeover, braquioplastia) entre 0,32 y 0,33. Se inyectan 6.167 caracteres y ninguno responde la pregunta. Es el caso que más me preocupa: a alguien que pregunta por bajar de peso se le está cargando el contexto con procedimientos quirúrgicos.</li>
+  <li><strong>«dónde están ubicados y cuál es el horario»</strong> → solo 4 resultados, el mejor a 0,37.</li>
+</ul>
+
+<div class="find c1">
+  <h4><span class="tag t-crit">Crítico</span> Devolver ruido apaga el respaldo que sí funcionaba</h4>
+  <p>Este es el mecanismo que hace que el problema duela. Cuando el RAG devuelve algo — cualquier cosa, aunque sea a 0,31 — <code>chat.js</code> toma la rama de los fragmentos y <strong>nunca manda la base de conocimiento completa</strong>. Es decir: mientras más laxo el umbral, más seguido se sustituye una respuesta correcta por seis fragmentos irrelevantes.</p>
+  <p>Para «precio», «ubicación» o «formas de pago», la base completa contiene la respuesta exacta. Hoy no llega, porque seis fragmentos de ruido le ganaron el puesto.</p>
+  <p class="ev"><strong>Evidencia:</strong> las 20 consultas corridas contra <code>match_sofia_chunks</code> en producción. 7 de 20 (35%) tienen mejor similitud &lt; 0,40 y aun así devuelven 4–6 fragmentos.</p>
+</div>
+</section>
+
+<hr class="rule">
+
+<section id="c">
+<h2><span class="ltr">C</span> El umbral de 0,3</h2>
+
+<p>Vale la pena detenerse acá porque el razonamiento que quedó escrito en el código es el que va a guiar el próximo cambio, y está invertido.</p>
+
+<p>El commit <code>7d6ef04</code> («umbral muy laxo») dice, correctamente, que el respaldo de mandar la base completa «prácticamente nunca se activaba». Y para arreglarlo <strong>bajó el umbral de 0,5 a 0,3</strong>. Bajar el umbral hace que pasen <em>más</em> resultados, o sea que el respaldo se active <em>menos</em>. La acción va en contra del objetivo declarado.</p>
+
+<p>La medición que respalda el 0,3 también mira la distribución equivocada. El comentario dice que «pares de fragmentos NO relacionados ya promedian ~0,507 de similitud». Eso es cierto — lo verifiqué, y da exactamente 0,5073 sobre los 5.356 pares posibles:</p>
+
+<div class="tw">
+<table>
+<thead><tr><th>Distribución</th><th class="num">n</th><th class="num">Media</th><th class="num">Mediana</th><th class="num">Máx.</th></tr></thead>
+<tbody>
+<tr><td>Fragmento ↔ fragmento <span style="color:var(--muted)">(la que se midió)</span></td><td class="num">5.356</td><td class="num">0,507</td><td class="num">0,497</td><td class="num">0,974</td></tr>
+<tr><td>Consulta ↔ fragmento <span style="color:var(--muted)">(la que importa)</span></td><td class="num">20</td><td class="num">0,447</td><td class="num">0,455</td><td class="num">0,632</td></tr>
+</tbody>
+</table>
+</div>
+
+<p>Son distribuciones distintas y no comparables. Los fragmentos son textos largos del mismo dominio, escritos por la misma persona, sobre la misma clínica: se parecen mucho entre sí por construcción. Una consulta de paciente son cuatro palabras mal escritas. <strong>La similitud consulta↔fragmento nunca llega a 0,63 ni en el mejor caso</strong>, así que un umbral calibrado sobre la distribución fragmento↔fragmento no significa nada para el caso de uso real.</p>
+
+<p>Dicho todo eso: <strong>el cambio a 0,3 sí arregló un problema real</strong>, solo que no el que dice el commit. Con 0,5, apenas 6 de mis 20 consultas habrían recuperado algo — el RAG estaba prácticamente muerto y casi todo el tráfico caía al respaldo. Bajar el umbral lo revivió. El error es haberse pasado hasta la banda de ruido.</p>
+
+<div class="find c2">
+  <h4><span class="tag t-warn">Alto</span> Subir el umbral a 0,45 y dejar caer al respaldo lo que no llegue</h4>
+  <p>Con 0,45, de mis 20 consultas <strong>11 siguen usando fragmentos</strong> (todas las que nombran un procedimiento, que es donde el RAG brilla) y <strong>9 caen a la base completa</strong> — que resultan ser exactamente las operativas y genéricas, donde la base completa contesta bien. El corte cae en el lugar correcto sin excepciones en la muestra.</p>
+  <p class="ev"><strong>Costo del cambio:</strong> unos <strong>+$11/mes</strong> (más tráfico por la rama de la base completa, que va cacheada y es barata). <strong>Dónde:</strong> <code>functions/api/chat.js:190</code> y el mismo <code>match_threshold</code> en el Worker. Recomiendo validar con 30–40 consultas reales sacadas de <code>sofia_conversations</code> antes de fijar el número definitivo entre 0,42 y 0,48.</p>
+</div>
+
+<div class="find c3">
+  <h4><span class="tag t-info">Medio</span> Recortar la cola: seis fragmentos fijos casi siempre son demasiados</h4>
+  <p><code>match_count: 6</code> es fijo, sin importar qué tan buenos sean los resultados. En «cuanto vale una abdominoplastia» el primero da 0,57 y el sexto 0,42: los últimos tres no aportan. Se inyectan 7.402 caracteres para usar unos 1.500.</p>
+  <p>Un corte relativo — descartar todo lo que esté más de ~0,12 por debajo del mejor resultado — recorta aproximadamente a la mitad los tokens inyectados y quita distractores del contexto. Es una línea de código sobre el arreglo del umbral.</p>
+</div>
+
+<div class="find c3">
+  <h4><span class="tag t-info">Medio</span> Los seguimientos cortos no encuentran de qué se estaba hablando</h4>
+  <p>La consulta de búsqueda concatena los <strong>últimos 2 mensajes del usuario</strong>. Es un buen heurístico y lo comprobé: ante «cuánto dura la recuperación de una abdominoplastia» seguido de «sí», concatenar rescata Abdominoplastia a 0,65, mientras que embeber solo «sí» no recupera nada. Ahí gana.</p>
+  <p>Pero tiene dos fugas. Cuando el paciente cambia de tema, la concatenación <em>estorba</em>: «cuánto vale un aumento de senos» + «y depilación láser hacen?» hunde <em>Depilación láser</em> del puesto 1 (0,64) al puesto 5 (0,48), y deja de primero un genérico «4. Cirugías». Y cuando el seguimiento se refiere a lo que dijo <em>Sofía</em> — «y cuánto cuesta?» después de que ella describió un procedimiento — no hay nada que rescatar, porque <strong>el turno del asistente nunca entra en la consulta</strong>: el mejor resultado queda en 0,39 y son procedimientos al azar.</p>
+  <p class="ev"><strong>Arreglo:</strong> incluir también el último mensaje del asistente en el texto que se embebe, y dar más peso al último mensaje del usuario que al anterior.</p>
+</div>
+</section>
+
+<hr class="rule">
+
+<section id="d">
+<h2><span class="ltr">D</span> Lo que el RAG realmente ahorra</h2>
+
+<p>Acá está el resultado que menos esperaba. La rama del respaldo manda la base completa <strong>cacheada</strong>; la rama del RAG manda los fragmentos <strong>sin cachear</strong> (correcto: cambian en cada consulta). Y las tarifas de esas dos cosas son muy distintas: lectura de caché cuesta $0,20 por millón de tokens, entrada normal cuesta $2,00. Diez veces más.</p>
+
+<pre><code>Rama RAG      ~1.250 tokens sin cachear × $2,00/MTok  = $0,00250 por mensaje
+Rama respaldo ~22.700 tokens cacheados × $0,20/MTok   = $0,00454 por mensaje
+                                            diferencia = $0,00204</code></pre>
+
+<p>Es decir: <strong>mandar la base de conocimiento entera cuesta menos del doble que mandar los 6 fragmentos recuperados.</strong> Proyectado sobre 17.337 mensajes al mes:</p>
+
+<div class="costs">
+  <div class="crow">
+    <div><div class="lbl">Sin RAG</div><div class="st">Siempre la base completa, cacheada a 1 h</div></div>
+    <div class="cbar"><i style="width:100%"></i></div>
+    <div class="v">~$151</div>
+  </div>
+  <div class="crow best">
+    <div><div class="lbl">Umbral 0,45</div><div class="st">RAG cuando hay coincidencia clara, respaldo si no</div></div>
+    <div class="cbar"><i style="width:87%"></i></div>
+    <div class="v">~$132</div>
+  </div>
+  <div class="crow">
+    <div><div class="lbl">Hoy (umbral 0,3)</div><div class="st">RAG en ~85% de los mensajes, ruido incluido</div></div>
+    <div class="cbar"><i style="width:80%"></i></div>
+    <div class="v">~$121</div>
+  </div>
+</div>
+
+<p>Todo el aparato del RAG — la dependencia de OpenAI, la tabla de embeddings, el pipeline de re-indexado, la llamada extra de ~300 ms en cada mensaje — está comprando <strong>unos $30 al mes</strong>. Y los está comprando a cambio de las respuestas de peor calidad de la sección B.</p>
+
+<p>La lectura no es «hay que quitar el RAG». Es que <strong>el RAG no es una palanca de costo, es una palanca de precisión</strong>, y hay que evaluarlo como tal. Donde acierta (procedimientos nombrados) enfoca el contexto y mejora la respuesta; donde falla, hay que dejarlo caer al respaldo sin miedo, porque el respaldo casi no cuesta. Eso es exactamente lo que hace subir el umbral a 0,45: se pagan $11 más al mes y se compran respuestas correctas en las preguntas operativas.</p>
+
+<div class="note">
+<p><strong>Si en algún momento se quiere simplificar la arquitectura,</strong> ahora hay un número para esa conversación: quitar el RAG por completo cuesta ~$30/mes y devuelve ~300 ms por mensaje, una dependencia externa menos y un pipeline menos que mantener. Con 22.700 tokens de base de conocimiento y una ventana de contexto de 1M, el modelo la maneja sin problema — de hecho ya lo hace hoy en el ~15% de los mensajes que caen al respaldo. No es mi recomendación por defecto, pero es una opción legítima y ya no hay que adivinar el precio.</p>
+</div>
+</section>
+
+<hr class="rule">
+
+<section id="e">
+<h2><span class="ltr">E</span> Prompt caching: lo que está bien</h2>
+
+<p>Antes de las críticas, tres cosas que están bien resueltas y que conviene no romper en el próximo refactor.</p>
+
+<div class="find c4">
+  <h4><span class="tag t-ok">Correcto</span> La hora está fuera del prefijo cacheado</h4>
+  <p>El caching es una coincidencia de <em>prefijo</em>: un solo byte distinto invalida todo lo que viene después. <code>horaContexto</code> cambia cada minuto y está puesto en su propio bloque al final, después de los dos puntos de corte. El comentario de <code>chat.js:216</code> explica exactamente por qué. Es el error clásico y acá está evitado.</p>
+</div>
+
+<div class="find c4">
+  <h4><span class="tag t-ok">Correcto</span> El bloque de <code>system</code> es idéntico en las dos ramas</h4>
+  <p>Tanto si el RAG devuelve fragmentos como si no, el primer bloque es el mismo y lleva su propio <code>cache_control</code>. Eso significa que el punto de corte 1 acierta <strong>siempre</strong>, sin importar qué rama se tome. Son ~7.700 tokens que se leen a $0,20 en vez de $2,00: unos <strong>$240/mes de ahorro</strong> frente a no cachear.</p>
+</div>
+
+<div class="find c4">
+  <h4><span class="tag t-ok">Correcto</span> El TTL de 1 hora está bien elegido — y ahora hay datos que lo prueban</h4>
+  <p>Medí los huecos entre conversaciones consecutivas de los últimos 14 días. De 3.601 huecos: <strong>66% por debajo de 5 minutos, 34% entre 5 minutos y 1 hora, 0,6% más de una hora.</strong></p>
+  <p>Ese 34% es justo la franja donde el TTL de 1 h se paga. Con TTL de 5 minutos, uno de cada tres mensajes llegaría con el caché ya vencido y pagaría escritura completa:</p>
+  <p class="ev"><strong>TTL 5 min:</strong> 0,66 × $0,20 + 0,34 × $2,50 = <strong>$0,98/MTok efectivos</strong> · <strong>TTL 1 h:</strong> 0,994 × $0,20 + 0,006 × $4,00 = <strong>$0,22/MTok efectivos</strong>. Sobre el bloque de <code>system</code> eso es <strong>~$101/mes de diferencia</strong> a favor de 1 hora. La decisión del commit <code>0394b49</code> fue correcta.</p>
+</div>
+</section>
+
+<hr class="rule">
+
+<section id="f">
+<h2><span class="ltr">F</span> Prompt caching: lo que está mal</h2>
+
+<div class="find c1">
+  <h4><span class="tag t-crit">Crítico</span> Dos endpoints tienen caching que no cachea nada</h4>
+  <p><code>daily-analysis.js:185</code> y <code>audit-sofia.js:136</code> marcan su bloque de <code>system</code> con <code>cache_control</code> y mandan el header <code>anthropic-beta: prompt-caching-2024-07-31</code>. Pero esos bloques miden <strong>260 y 309 caracteres</strong> — unos 72 y 86 tokens. El mínimo cacheable de <code>claude-sonnet-4-6</code> es de <strong>1.024 tokens</strong>.</p>
+  <p>Por debajo del mínimo la API no da error: simplemente devuelve <code>cache_creation_input_tokens: 0</code> y sigue. Nunca ha cacheado y nunca va a cachear.</p>
+  <p>Y el contenido que sí es grande — el prompt con todas las campañas de Meta, o con las transcripciones de conversaciones para la auditoría — va en el mensaje del usuario, sin cachear. Aunque tampoco tendría sentido cachearlo: cada corrida trae datos nuevos, así que no hay prefijo reutilizable.</p>
+  <p class="ev"><strong>Arreglo:</strong> quitar el <code>cache_control</code> y el header beta de ambos. No se pierde nada — nunca estuvieron haciendo efecto — y se elimina la impresión de que esos endpoints están optimizados cuando no lo están.</p>
+</div>
+
+<div class="find c2">
+  <h4><span class="tag t-warn">Alto</span> No hay forma de saber si el caching está funcionando</h4>
+  <p>Ninguno de los tres endpoints registra <code>usage.cache_read_input_tokens</code>. Esa es la única señal de que el caching funciona, y este es el modo de falla más caro que existe: <strong>si mañana alguien agrega un campo dinámico al <code>system</code>, el caché deja de acertar, todo sigue respondiendo bien y la factura sube 10× sin que nada avise.</strong></p>
+  <p>El endpoint ya devuelve <code>{...data}</code> al cliente, así que <code>usage</code> ya viaja. Falta un <code>console.log</code> con los tres campos y, si se quiere, una alerta cuando <code>cache_read_input_tokens</code> venga en cero varias veces seguidas.</p>
+  <p class="ev"><strong>Prioridad alta</strong> no por lo que ahorra hoy, sino porque es lo único que protege los ~$240/mes que el caching ya está ahorrando.</p>
+</div>
+
+<div class="find c3">
+  <h4><span class="tag t-info">Medio</span> El historial de mensajes nunca se cachea (y está bien así, por ahora)</h4>
+  <p>El orden de render es <code>tools → system → messages</code>. Como los fragmentos del RAG y la hora viven en <code>system</code> y cambian en cada turno, <strong>todo el historial queda río abajo de un prefijo que cambia</strong> y no puede cachearse nunca. La solución canónica sería mover lo volátil al último mensaje del usuario y dejar <code>system</code> congelado.</p>
+  <p>Lo medí antes de recomendarlo: son <strong>2,0 mensajes por sesión</strong> en promedio (17.337 mensajes / 8.569 sesiones). El historial pesa unos 300 tokens. El arreglo ahorraría unos <strong>$5/mes</strong> a cambio de reestructurar el armado del prompt en dos repos.</p>
+  <p class="ev"><strong>No lo hagan ahora.</strong> Vale la pena si las conversaciones se alargan — si el promedio sube por encima de ~6 turnos, la cuenta cambia y conviene revisitarlo.</p>
+</div>
+
+<div class="find c3">
+  <h4><span class="tag t-info">Medio</span> El header <code>extended-cache-ttl-2025-04-11</code> probablemente ya sobra</h4>
+  <p><code>chat.js:79</code> manda ese header beta para poder usar <code>ttl: "1h"</code>. El TTL de una hora ya es funcionalidad general y se usa sin header. Es inofensivo — la API acepta el request, que es lo que se ve en producción — pero es una línea que confunde a quien lo lea después.</p>
+</div>
+
+<div class="find c3">
+  <h4><span class="tag t-info">Medio</span> El probador del dashboard escribe en su propio caché</h4>
+  <p><code>TestSofiaSection.jsx:95</code> manda <code>system</code> y <code>knowledge_base</code> desde el navegador, con el contenido de los cuadros de texto de la pantalla de configuración. El widget público no manda nada y el servidor los lee de Supabase.</p>
+  <p>Como el caché es coincidencia exacta de bytes, <strong>si el texto del editor difiere en un solo carácter de lo guardado en Supabase, el probador escribe una entrada de caché aparte</strong> y paga escritura a 2× (~16.000 tokens) en cada prueba. Es poco volumen, pero es gasto real cada vez que alguien ajusta el prompt y prueba sin guardar.</p>
+</div>
+</section>
+
+<hr class="rule">
+
+<section id="g">
+<h2><span class="ltr">G</span> El pipeline de indexación</h2>
+
+<p>Empiezo por lo bueno: <strong>el índice está sincronizado.</strong> Corrí el chunker de <code>reindex.js</code> contra la base de conocimiento en vivo y comparé fragmento por fragmento con lo que hay en la tabla: 104 contra 104, cero faltantes, cero huérfanos. Lo único que el filtro de 80 caracteres descarta es el encabezado suelto «## 5. Tratamientos estéticos no quirúrgicos», que no lleva contenido. Eso está sano.</p>
+
+<div class="find c2">
+  <h4><span class="tag t-warn">Alto</span> No hay forma de saber si el índice quedó desactualizado</h4>
+  <p><code>sofia_config.updated_at</code> marca <strong>10 de agosto</strong>, pero la base de conocimiento contiene las promociones de <em>septiembre</em>. La columna no se está manteniendo: no hay trigger en la tabla (lo verifiqué) y el dashboard no la escribe al guardar.</p>
+  <p>Consecuencia: si alguien edita el conocimiento y olvida pulsar «Re-indexar», <strong>Sofía sigue citando precios viejos indefinidamente y nada lo delata.</strong> Hoy están sincronizados por suerte, no por diseño.</p>
+  <p class="ev"><strong>Arreglo:</strong> un trigger que ponga <code>updated_at = now()</code> en <code>sofia_config</code>, y en la pantalla de configuración una advertencia cuando <code>max(created_at)</code> de los fragmentos sea anterior a ese <code>updated_at</code>. Ya existe <code>sofia_touch_updated_at()</code> en la base; es cuestión de colgarla de esta tabla.</p>
+</div>
+
+<div class="find c2">
+  <h4><span class="tag t-warn">Alto</span> El re-indexado borra antes de insertar, en dos pasos separados</h4>
+  <p><code>reindex.js</code> hace <code>DELETE</code> de todos los fragmentos y después <code>POST</code> de los nuevos, como dos llamadas HTTP independientes. Entre una y otra <strong>la tabla queda vacía</strong>: cualquier mensaje que entre en esa ventana no recupera nada. Eso se degrada con elegancia (cae al respaldo), así que no es grave.</p>
+  <p>Lo que sí es grave: <strong>si el <code>POST</code> falla, el índice queda vacío de forma permanente</strong> y Sofía se queda sin RAG hasta que alguien lo note. Y ese POST no es pequeño — 104 fragmentos × 1.536 dimensiones son unos <strong>3 MB de JSON en un solo request</strong>. Hoy funciona; con una base de conocimiento del doble de tamaño puede dejar de funcionar.</p>
+  <p class="ev"><strong>Arreglo:</strong> insertar por lotes de ~20 fragmentos, y hacer el borrado y la inserción dentro de una función de Postgres para que sea atómico. El código ya valida los embeddings antes de borrar, que es la mitad difícil y está bien hecha.</p>
+</div>
+
+<div class="find c3">
+  <h4><span class="tag t-info">Medio</span> <code>scripts/index-knowledge.js</code> está roto y no lo usa nadie</h4>
+  <p>Es una copia vieja de <code>index-knowledge.mjs</code>. Hace <code>upsert(..., { onConflict: "category" })</code>, pero <strong>no existe restricción única sobre <code>category</code></strong> — y de hecho hay categorías repetidas en el índice. Ese upsert fallaría si alguien lo corriera. <code>package.json</code> apunta al <code>.mjs</code>, así que este archivo es solo una trampa esperando a quien confunda los nombres. Borrarlo.</p>
+</div>
+
+<div class="find c3">
+  <h4><span class="tag t-info">Medio</span> Fragmento duplicado: «Limpieza facial» ×2</h4>
+  <p>El chunker produce dos fragmentos con la misma categoría. En la consulta «limpieza facial cuanto sale» ambos salen (0,60 y 0,57) y <strong>se comen dos de los seis espacios disponibles</strong> con contenido que se solapa. Deduplicar por categoría al recuperar, o revisar el marcado de esa sección en la base de conocimiento.</p>
+</div>
+
+<div class="find c3">
+  <h4><span class="tag t-info">Medio</span> La búsqueda no usa índice vectorial (y hoy no importa)</h4>
+  <p>La tabla solo tiene índice de clave primaria, y aunque se le agregara uno <code>ivfflat</code> o <code>hnsw</code>, <strong><code>match_sofia_chunks</code> no podría usarlo</strong>: ordena por <code>similarity desc</code> sobre una columna calculada, y pgvector solo acelera <code>ORDER BY embedding &lt;=&gt; consulta</code> ascendente. Siempre hace recorrido secuencial.</p>
+  <p>Con 104 filas eso son un par de milisegundos y no vale la pena tocarlo. Lo anoto para cuando la base de conocimiento crezca: pasado el orden de los miles de fragmentos, hay que reescribir la función <em>y</em> crear el índice — uno solo de los dos no sirve de nada.</p>
+</div>
+</section>
+
+<hr class="rule">
+
+<section id="h">
+<h2><span class="ltr">H</span> Alrededores</h2>
+
+<p>Cosas que aparecieron mientras revisaba el RAG y el caching, y que tocan las mismas líneas de código.</p>
+
+<div class="find c2">
+  <h4><span class="tag t-warn">Alto</span> Si el RAG se cae, nadie se entera</h4>
+  <p><code>chat.js:198</code> es un <code>catch {}</code> vacío, con el comentario «RAG falla silenciosamente». Es la decisión correcta para el paciente — Sofía contesta igual con la base completa — pero <strong>no hay ningún registro</strong>. Si la llave de OpenAI vence o su API se degrada, el RAG queda apagado indefinidamente: el costo sube, la calidad de respuesta cambia y nada lo indica. Basta un <code>console.error</code> dentro del catch.</p>
+</div>
+
+<div class="find c2">
+  <h4><span class="tag t-warn">Alto</span> Se reintentan errores que nunca van a funcionar</h4>
+  <p><code>callClaudeWithRetry</code> reintenta 3 veces ante cualquier fallo, incluidos los 4xx. Un 400 por prompt mal formado — por ejemplo si <code>system</code> viene vacío porque falló la lectura de Supabase, que es un caso alcanzable dado el <code>catch {}</code> de la línea 145 — se reintenta 3 veces con 1,3 s de esperas, para fallar igual. Reintentar solo 408, 409, 429 y 5xx.</p>
+</div>
+
+<div class="find c3">
+  <h4><span class="tag t-info">Medio</span> Tres endpoints, dos modelos distintos</h4>
+  <p><code>chat.js</code> usa <code>claude-sonnet-5</code>; <code>daily-analysis.js</code> y <code>audit-sofia.js</code> siguen en <code>claude-sonnet-4-6</code>. Sonnet 5 es más nuevo <em>y</em> más barato: $2/$10 por millón de tokens contra $3/$15. En volumen son endpoints pequeños, así que el ahorro es simbólico; el argumento es de consistencia y capacidad.</p>
+  <p class="ev"><strong>Ojo con esto si los migran:</strong> ambos leen la respuesta como <code>claudeData.content?.[0]?.text</code>. En Sonnet 4.6 sin parámetro <code>thinking</code> eso funciona, pero <strong>Sonnet 5 corre pensamiento adaptativo por defecto</strong>, así que <code>content[0]</code> puede ser un bloque de <em>thinking</em> y el reporte se convertiría en «No se pudo generar el análisis» sin más explicación. Hay que buscar el bloque de texto, como ya hace <code>chat.js:266</code>. Es exactamente el mismo bug que la auditoría del 19 de agosto encontró en el chat.</p>
+</div>
+
+<div class="find c1">
+  <h4><span class="tag t-crit">Crítico</span> El endpoint sigue abierto — y ahora sabemos cuánto cuesta cada llamada</h4>
+  <p>No es un hallazgo nuevo: la auditoría del 30 de agosto ya lo documentó y sigue sin corregirse. <code>/api/chat</code> se protege con <code>x-sofia-secret</code>, cuyo valor viene de <code>VITE_SOFIA_SECRET</code>, y <strong>toda variable <code>VITE_*</code> se compila dentro del bundle público</strong>.</p>
+  <p>Lo traigo a este informe porque cambia de categoría: además del riesgo ya descrito, <code>chat.js</code> acepta un <code>system</code> arbitrario desde el cliente. Cualquiera con el bundle puede usar la cuenta de Anthropic del CEC como modelo de propósito general, <strong>con el prompt que quiera</strong>, a costo del CEC. Todo el trabajo de optimización de este informe se vuelve irrelevante si esa puerta queda abierta.</p>
+</div>
+</section>
+
+<hr class="rule">
+
+<section id="i">
+<h2><span class="ltr">I</span> Qué haría, en orden</h2>
+
+<div class="phase">
+  <p class="when">Primero · una tarde</p>
+  <ol>
+    <li><strong>Subir <code>match_threshold</code> a 0,45</strong> en <code>chat.js</code> y en el Worker. Antes de fijarlo, sacar 30–40 primeros mensajes reales de <code>sofia_conversations</code> y correr la misma prueba de esta auditoría para ajustar el número entre 0,42 y 0,48. Es el cambio de mayor impacto del informe.</li>
+    <li><strong>Registrar <code>usage</code> de caché</strong> en los tres endpoints. Sin esto no hay forma de saber si algo de lo demás funciona.</li>
+    <li><strong><code>console.error</code> en el <code>catch</code> del RAG.</strong> Una línea.</li>
+    <li><strong>Quitar el <code>cache_control</code> muerto</strong> de <code>daily-analysis.js</code> y <code>audit-sofia.js</code>, junto con su header beta.</li>
+    <li><strong>Borrar <code>scripts/index-knowledge.js</code></strong>, que está roto y duplicado.</li>
+  </ol>
+</div>
+
+<div class="phase">
+  <p class="when">Después · una semana</p>
+  <ol start="6">
+    <li><strong>Cerrar <code>/api/chat</code></strong> con el patrón de token de sesión de Supabase y rotar el secreto. Pendiente desde la auditoría anterior.</li>
+    <li><strong>Trigger de <code>updated_at</code> en <code>sofia_config</code></strong> más el aviso de «índice desactualizado» en la pantalla de configuración.</li>
+    <li><strong>Re-indexado atómico y por lotes</strong>, para que un fallo a mitad de camino no deje el índice vacío.</li>
+    <li><strong>Recorte relativo de la cola de fragmentos</strong> (descartar lo que esté &gt;0,12 por debajo del mejor) y deduplicar por categoría.</li>
+    <li><strong>Incluir el último turno del asistente</strong> en el texto que se embebe, para que los seguimientos cortos encuentren el tema.</li>
+    <li><strong>Reintentar solo errores transitorios</strong> en <code>callClaudeWithRetry</code>.</li>
+  </ol>
+</div>
+
+<div class="phase">
+  <p class="when">Cuando toque · a discutir</p>
+  <ol start="12">
+    <li><strong>Migrar <code>daily-analysis</code> y <code>audit-sofia</code> a <code>claude-sonnet-5</code></strong>, arreglando <code>content[0]</code> en el mismo cambio. No antes: si se migra sin eso, los reportes se rompen en silencio.</li>
+    <li><strong>Revisar si el RAG sigue valiendo la pena</strong> con los números de la sección D sobre la mesa. Después de subir el umbral, volver a medir: si el ahorro cae por debajo de ~$20/mes, la simplicidad de arquitectura probablemente vale más.</li>
+    <li><strong>Cachear el historial de mensajes</strong> solo si el promedio de turnos por conversación sube de ~6. Hoy son 2,0 y no se paga.</li>
+  </ol>
+</div>
+
+<div class="note">
+<p><strong>Lo que no hay que tocar.</strong> El bloque de hora fuera del prefijo cacheado, el <code>system</code> idéntico en ambas ramas, y el TTL de 1 hora. Los tres están bien resueltos y los tres son fáciles de romper sin querer en un refactor. Si alguno se rompe, el registro de <code>usage</code> del punto 2 es lo que lo va a delatar.</p>
+</div>
+</section>
+
+<hr class="rule">
+
+<section id="j">
+<h2><span class="ltr">J</span> Cómo se midió</h2>
+<p>Todo lo que este informe afirma sale de producción, no de leer el código:</p>
+<ul>
+  <li><strong>Recuperación:</strong> 20 consultas escritas como paciente, embebidas con <code>text-embedding-3-small</code> y corridas contra <code>match_sofia_chunks</code> en el proyecto de Supabase real, con los parámetros de <code>chat.js</code>. Se registró posición, similitud y caracteres inyectados de cada resultado.</li>
+  <li><strong>Piso de ruido:</strong> los 5.356 pares posibles entre los 104 fragmentos, comparados con <code>1 - (embedding &lt;=&gt; embedding)</code> en la base.</li>
+  <li><strong>Multi-turno:</strong> 4 escenarios corridos dos veces cada uno — solo el último mensaje contra los últimos dos concatenados — para aislar el efecto de la concatenación.</li>
+  <li><strong>Sincronía del índice:</strong> se ejecutó el chunker de <code>reindex.js</code> contra la base de conocimiento en vivo y se comparó el resultado, normalizado, contra las 104 filas de la tabla.</li>
+  <li><strong>Tráfico y TTL:</strong> <code>sofia_interaction_dedup</code> (17.337 mensajes / 30 días) y <code>sofia_whatsapp_sessions</code> (8.569 sesiones), más la distribución de huecos entre conversaciones consecutivas de los últimos 14 días.</li>
+  <li><strong>Costos:</strong> tarifas de Sonnet 5 ($2,00 entrada / $10,00 salida por MTok; lectura de caché 0,1× ; escritura a 1 h 2×). Tokens estimados a 3,6 caracteres por token sobre longitudes reales medidas en la base. Son estimaciones de orden de magnitud.</li>
+</ul>
+</section>
+
+</div>
