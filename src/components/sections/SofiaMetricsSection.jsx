@@ -345,13 +345,21 @@ export function SofiaMetricsSection({ setActive }) {
     (c) => (c.message_count || 0) > 1 && !c.escalated
   ).length;
   const pct = (n) => (totalConversations > 0 ? Math.round((n / totalConversations) * 100) : 0);
+  // Ordenados por qué tan lejos llegó la persona: escribió una vez y no
+  // volvió, tuvo conversación con Sofía, o llegó hasta un asesor. El color
+  // sigue ese mismo orden (salvia claro -> verde -> dorado) para que la
+  // progresión se lea de un vistazo, sin estudiar la leyenda.
+  //
+  // OJO: el color NO dice bueno/malo. Ninguno de los tres es una cita — eso
+  // lo aclara la nota al pie. Dice qué tan avanzada quedó la conversación,
+  // que es un hecho observable y no una interpretación.
   const desglose = [
-    { label: "Escalaron a un asesor", n: escalatedCount, color: COLORS.gold,
-      detail: "Sofía pasó la conversación a una persona" },
+    { label: "No siguieron", n: sinEnganche, color: "#B7C6BE",
+      detail: "Escribieron una sola vez y no volvieron a responder" },
     { label: "Atendidas por Sofía", n: atendidasPorSofia, color: COLORS.success,
       detail: "Hubo intercambio y no hizo falta un asesor" },
-    { label: "No siguieron", n: sinEnganche, color: COLORS.textMuted,
-      detail: "Escribieron una sola vez y no volvieron a responder" },
+    { label: "Escalaron a un asesor", n: escalatedCount, color: COLORS.gold,
+      detail: "Sofía pasó la conversación a una persona" },
   ];
 
   const positiveOrNeutral = conversations.filter((c) => {
@@ -472,7 +480,14 @@ export function SofiaMetricsSection({ setActive }) {
 
           {/* Desglose honesto del resultado de cada conversación. Reemplaza
               al KPI "Resueltas sin asesor", que contaba como éxito a quien
-              escribió una sola vez y nunca volvió. */}
+              escribió una sola vez y nunca volvió.
+
+              La lee gerencia y las asesoras, no solo quien programa: por eso
+              cada grupo es un bloque con su porcentaje grande en vez de una
+              leyenda de colores que hay que ir a cruzar con la barra. Con
+              tres valores cercanos a un tercio, la barra sola no comunicaba
+              nada que los números no dijeran mejor — queda arriba solo como
+              proporción de un vistazo. */}
           <Card>
             <h3 style={{ margin: "0 0 4px", fontSize: 18, fontFamily: "'Cormorant Garamond', serif", fontWeight: 600, color: COLORS.green }}>
               En qué terminó cada conversación
@@ -486,33 +501,48 @@ export function SofiaMetricsSection({ setActive }) {
               </p>
             ) : (
               <>
-                <div style={{ display: "flex", height: 10, borderRadius: 5, overflow: "hidden", marginBottom: 16 }}>
+                <div style={{ display: "flex", height: 14, borderRadius: 7, overflow: "hidden", marginBottom: 18, background: COLORS.panelAlt }}>
                   {desglose.filter((d) => d.n > 0).map((d) => (
                     <div key={d.label} style={{ width: `${(d.n / totalConversations) * 100}%`, background: d.color }} />
                   ))}
                 </div>
-                <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+
+                <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(190px, 1fr))", gap: 12 }}>
                   {desglose.map((d) => (
-                    <div key={d.label} style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", gap: 12 }}>
-                      <span style={{ display: "flex", alignItems: "center", gap: 8, minWidth: 0 }}>
-                        <span style={{ width: 8, height: 8, borderRadius: "50%", background: d.color, flexShrink: 0 }} />
-                        <span style={{ fontSize: 13, fontFamily: "'Manrope', sans-serif" }}>
-                          <strong style={{ color: COLORS.text }}>{d.label}</strong>
-                          <span style={{ color: COLORS.textMuted }}> — {d.detail}</span>
-                        </span>
-                      </span>
-                      <span style={{ fontSize: 13, fontWeight: 700, color: COLORS.green, fontFamily: "'Manrope', sans-serif", whiteSpace: "nowrap", fontVariantNumeric: "tabular-nums" }}>
-                        {d.n} · {pct(d.n)}%
-                      </span>
+                    <div key={d.label} style={{
+                      background: COLORS.bg,
+                      border: `1px solid ${COLORS.border}`,
+                      borderTop: `4px solid ${d.color}`,
+                      borderRadius: 12,
+                      padding: "14px 16px 16px",
+                    }}>
+                      <div style={{ fontSize: 28, fontWeight: 700, lineHeight: 1.1, color: COLORS.green, fontFamily: "'Manrope', sans-serif", fontVariantNumeric: "tabular-nums" }}>
+                        {pct(d.n)}%
+                      </div>
+                      <div style={{ fontSize: 12, color: COLORS.textMuted, fontFamily: "'Manrope', sans-serif", marginBottom: 10 }}>
+                        {d.n} {d.n === 1 ? "conversación" : "conversaciones"}
+                      </div>
+                      <div style={{ fontSize: 13, fontWeight: 700, color: COLORS.text, fontFamily: "'Manrope', sans-serif" }}>
+                        {d.label}
+                      </div>
+                      <div style={{ fontSize: 12, lineHeight: 1.45, color: COLORS.textMuted, fontFamily: "'Manrope', sans-serif", marginTop: 3 }}>
+                        {d.detail}
+                      </div>
                     </div>
                   ))}
                 </div>
-                <p style={{ margin: "14px 0 0", fontSize: 11.5, lineHeight: 1.5, color: COLORS.textMuted, fontFamily: "'Manrope', sans-serif" }}>
-                  <strong>Ninguno de estos tres grupos quiere decir que la persona haya agendado.</strong> Acá
-                  se ve cómo terminó la conversación con Sofía, no si la persona llegó a la clínica.
-                  Eso se anota a mano en Seguimiento, y mientras no se anote ahí no hay manera de
-                  saber cuántas de estas conversaciones terminaron en cita.
-                </p>
+
+                {/* La advertencia es la frase más importante de la tarjeta y
+                    estaba en el texto más chico de la pantalla. Va en caja
+                    para que se lea antes de sacar conclusiones, no después. */}
+                <div style={{ marginTop: 16, padding: "12px 14px", borderRadius: 10, background: COLORS.warningBg, border: `1px solid ${COLORS.warningBorder}` }}>
+                  <p style={{ margin: 0, fontSize: 13, lineHeight: 1.55, color: COLORS.text, fontFamily: "'Manrope', sans-serif" }}>
+                    <strong>Ninguno de estos tres grupos quiere decir que la persona haya agendado.</strong> Acá
+                    se ve cómo terminó la conversación con Sofía, no si la persona llegó a la clínica.
+                    Eso se anota a mano en Seguimiento, y mientras no se anote ahí no hay manera de
+                    saber cuántas de estas conversaciones terminaron en cita.
+                  </p>
+                </div>
               </>
             )}
           </Card>
