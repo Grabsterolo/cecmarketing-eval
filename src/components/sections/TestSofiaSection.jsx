@@ -88,11 +88,17 @@ export function TestSofiaSection() {
     setTyping(true);
 
     try {
+      // El backend solo acepta un prompt distinto al guardado si viene de un
+      // usuario logueado — sin este token probaría el prompt guardado y no el
+      // que está en pantalla. Ver functions/api/chat.js.
+      const { data: { session } } = await supabase.auth.getSession();
+
       const res = await fetch("/api/chat", {
         method: "POST",
         headers: {
           "content-type": "application/json",
           "x-sofia-secret": import.meta.env.VITE_SOFIA_SECRET,
+          ...(session?.access_token ? { Authorization: `Bearer ${session.access_token}` } : {}),
         },
         body: JSON.stringify({ system: systemPrompt, knowledge_base: knowledge, messages: newMessages }),
       });
@@ -102,6 +108,12 @@ export function TestSofiaSection() {
         setMessages(prev => prev.slice(0, -1)); // quita el mensaje del usuario que no se pudo procesar
         setInput(text);
         return;
+      }
+      // Si la sesión venció, el backend responde con el prompt guardado. Sin
+      // este aviso, la respuesta se leería como si el borrador en pantalla
+      // fuera el que se probó.
+      if (data?.prompt_source === "saved") {
+        setSendError("Tu sesión venció, así que esta respuesta usó el prompt guardado, no el que tenés en pantalla. Volvé a iniciar sesión para probar tus cambios.");
       }
       const reply = data?.reply ?? "(Sin respuesta)";
       setMessages(prev => [...prev, {
