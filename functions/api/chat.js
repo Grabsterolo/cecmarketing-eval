@@ -112,6 +112,42 @@ async function callClaudeWithRetry(env, systemBlocks, claudeMessages) {
   return { error: lastFailure, data: lastErrorData, status: lastStatus };
 }
 
+// De quién se acepta el prompt de Sofía.
+//
+// Hasta el 2026-09-03 este endpoint tomaba `system` y `knowledge_base` del
+// cuerpo de la petición viniera de donde viniera. El único candado es
+// x-sofia-secret, y ese valor sale de VITE_SOFIA_SECRET, que se compila
+// dentro del bundle público — o sea que es de dominio público. La
+// consecuencia no era solo "alguien puede hablar con Sofía": era que
+// cualquiera podía mandar SUS PROPIAS instrucciones y usar la cuenta de
+// Anthropic del CEC como un Claude de propósito general, con el prompt que
+// quisiera y a costa del CEC. Ver auditoría 2026-09-03 sección H.
+//
+// Ahora esos dos campos solo se respetan si quien llama trae el access_token
+// de un usuario logueado en el dashboard — que es exactamente el caso de
+// "Probar a Sofía", donde el punto es probar un prompt antes de guardarlo.
+// El widget público (SofiaPublic) nunca los mandó — manda solo `messages` —
+// así que para el visitante del sitio no cambia nada.
+//
+// Mismo patrón de verificación que callerIsAuthenticated() en
+// functions/api/meta-metrics.js.
+async function callerIsAuthenticated(env, accessToken) {
+  if (!accessToken) return false;
+  try {
+    const res = await fetch(`${env.SUPABASE_URL}/auth/v1/user`, {
+      headers: {
+        apikey: env.SUPABASE_SERVICE_ROLE_KEY,
+        Authorization: `Bearer ${accessToken}`,
+      },
+    });
+    if (!res.ok) return false;
+    const user = await res.json();
+    return Boolean(user?.id);
+  } catch {
+    return false;
+  }
+}
+
 export async function onRequestPost({ request, env }) {
   if (request.headers.get("x-sofia-secret") !== env.SOFIA_CHAT_SECRET) {
     return new Response(JSON.stringify({ error: "Unauthorized" }), {
@@ -122,10 +158,17 @@ export async function onRequestPost({ request, env }) {
 
   const { system: systemFromClient, knowledge_base: kbFromClient, messages } = await request.json();
 
-  let system = systemFromClient;
-  let knowledge_base = kbFromClient;
+  // Solo se consulta a Supabase cuando el cliente realmente mandó un prompt
+  // propio; el widget público no paga ese viaje extra en cada mensaje.
+  const clientSentPrompt = Boolean(systemFromClient || kbFromClient);
+  const accessToken = (request.headers.get("authorization") || "").replace(/^Bearer\s+/i, "");
+  const clientPromptTrusted = clientSentPrompt && await callerIsAuthenticated(env, accessToken);
 
-  // Si no vienen del cliente (SofiaPublic), cargarlos desde Supabase
+  let system = clientPromptTrusted ? systemFromClient : null;
+  let knowledge_base = clientPromptTrusted ? kbFromClient : null;
+
+  // Lo que no venga de un cliente autenticado se carga desde Supabase, que es
+  // la única fuente de verdad para el widget público.
   if (!system || !knowledge_base) {
     try {
       const configRes = await fetch(
@@ -281,7 +324,13 @@ export async function onRequestPost({ request, env }) {
   // — finalReply es lo que realmente se muestra, igual que el Worker.
   const finalReply = escalated && !reply ? pickEscalationFallbackReply() : reply;
 
-  return new Response(JSON.stringify({ ...data, reply: finalReply, escalated, escalation_reason }), {
+  // prompt_source le dice al dashboard qué prompt se usó realmente. Sin esto,
+  // una sesión vencida en "Probar a Sofía" haría que se probara en silencio el
+  // prompt GUARDADO en vez del que está en pantalla — y el resultado se leería
+  // como si el borrador funcionara. Ver TestSofiaSection.
+  const prompt_source = clientPromptTrusted ? "client" : "saved";
+
+  return new Response(JSON.stringify({ ...data, reply: finalReply, escalated, escalation_reason, prompt_source }), {
     status,
     headers: { "content-type": "application/json" },
   });
