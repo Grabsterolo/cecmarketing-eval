@@ -189,14 +189,26 @@ export async function onRequestPost({ request, env }) {
   }
 
   // 1. Generar embedding combinando los últimos 2 mensajes del usuario (contexto multi-turno)
+  //
+  // Las notas de voz, imágenes y stickers llegan como el literal
+  // "[mensaje sin texto]" — el 1,7% de los mensajes de paciente (49 de 2.937
+  // medidos sobre 1.000 sesiones). Buscarlos no puede dar nada: no hay nada
+  // que buscar. Hoy igual se embeben en OpenAI y recuperan seis fragmentos al
+  // azar que se le mandan a Claude, unos 290 viajes completos al mes para
+  // nada. Ojo con no filtrar de más: "[transcripción de nota de voz]: ..." SÍ
+  // trae contenido y tiene que seguir buscándose.
+  const PLACEHOLDER_SIN_TEXTO = /^\s*\[\s*mensaje sin texto\s*\]\s*$/i;
+
   const searchQuery = messages
-    .filter(m => m.role === "user")
+    .filter(m => m.role === "user" && !PLACEHOLDER_SIN_TEXTO.test(m.content || ""))
     .slice(-2)
     .map(m => m.content)
     .join(" ");
   let chunks = [];
 
-  try {
+  // Sin texto que buscar se salta el RAG entero y Sofía responde con la base
+  // de conocimiento completa, que es la rama cacheada y barata.
+  if (searchQuery.trim()) try {
     const embedRes = await fetch("https://api.openai.com/v1/embeddings", {
       method: "POST",
       headers: {
@@ -224,13 +236,30 @@ export async function onRequestPost({ request, env }) {
         body: JSON.stringify({
           query_embedding: queryEmbedding,
           match_count: 6,
-          // 0.5 estaba por debajo del "piso de ruido" real de este corpus:
-          // pares de chunks NO relacionados ya promedian ~0.507 de similitud
-          // coseno entre sí (medido sobre los 79 chunks reales), así que el
-          // umbral casi nunca filtraba nada — match_sofia_chunks devolvía
-          // resultados aunque no hubiera nada realmente relevante, lo cual
-          // apagaba el fallback de mandar el knowledge_base completo.
-          match_threshold: 0.3,
+          // Medido sobre 180 consultas reconstruidas de conversaciones reales
+          // (auditoría 2026-09-03, sección C), no sobre consultas inventadas.
+          //
+          // El 0.3 anterior se calibró contra la distribución equivocada: la
+          // similitud entre PARES DE CHUNKS (media 0.507), que son textos
+          // largos del mismo dominio y por eso se parecen mucho entre sí. La
+          // que importa es consulta↔chunk, que no pasa de 0.74 ni en el mejor
+          // caso. Con 0.3 el RAG se llevaba el 95% de los mensajes y el 27%
+          // del contexto inyectado eran chunks sin relación con la pregunta.
+          //
+          // La distribución real tiene un valle entre 0.40 y 0.45: 70
+          // consultas por debajo de 0.40, 99 por encima de 0.45, y solo 10 en
+          // el medio. Cortar en 0.45 separa las dos poblaciones: baja al 55%
+          // los mensajes que usan RAG y sube la similitud media de lo
+          // inyectado de 0.460 a 0.552.
+          //
+          // Lo que no llega cae al knowledge_base completo, que es la rama
+          // CACHEADA — más barata por token que los chunks sin cachear — y
+          // que contiene todo lo que contenían los chunks, nunca menos. Es
+          // además la red que atrapa aquello en lo que la búsqueda semántica
+          // es peor: los nombres de marca del CEC. "Preservé™" no supera 0.45
+          // ni escrito perfecto, porque un embedding no tiene con qué
+          // relacionar un nombre inventado.
+          match_threshold: 0.45,
         }),
       });
 
@@ -238,8 +267,12 @@ export async function onRequestPost({ request, env }) {
         chunks = await ragRes.json();
       }
     }
-  } catch {
-    // RAG falla silenciosamente — Sofía responde igual sin chunks
+  } catch (err) {
+    // El RAG falla en silencio a propósito: Sofía responde igual con la base
+    // completa y el paciente no ve nada raro. Pero SIN dejar rastro, si la
+    // llave de OpenAI vence o su API se degrada, el RAG queda apagado
+    // indefinidamente —el costo sube, la calidad cambia— y nadie se entera.
+    console.error("[sofia_chat] RAG falló, se responde con la base completa:", err?.message || err);
   }
 
   // Hora actual en Costa Rica (UTC-6)
@@ -329,6 +362,29 @@ export async function onRequestPost({ request, env }) {
   // prompt GUARDADO en vez del que está en pantalla — y el resultado se leería
   // como si el borrador funcionara. Ver TestSofiaSection.
   const prompt_source = clientPromptTrusted ? "client" : "saved";
+
+  // Una línea por mensaje con lo único que demuestra que el caching y el RAG
+  // están funcionando. Es el modo de falla más caro que existe porque es
+  // silencioso: si mañana alguien mete un campo dinámico en el `system`, el
+  // caché deja de acertar, todo sigue respondiendo bien y la factura sube 10×
+  // sin que nada avise. Qué mirar:
+  //
+  //   cache_lectura en 0 varias veces seguidas → el caché dejó de acertar.
+  //   rag_fragmentos en 0 de forma sostenida   → el RAG está caído (ver el
+  //                                              console.error de arriba).
+  //   rag_mejor_similitud                      → para vigilar el umbral de
+  //                                              0.45 con tráfico real.
+  const uso = data?.usage || {};
+  console.log(JSON.stringify({
+    evento: "sofia_chat",
+    cache_lectura: uso.cache_read_input_tokens ?? 0,
+    cache_escritura: uso.cache_creation_input_tokens ?? 0,
+    entrada_sin_cachear: uso.input_tokens ?? 0,
+    salida: uso.output_tokens ?? 0,
+    rag_fragmentos: chunks.length,
+    rag_mejor_similitud: chunks[0]?.similarity ?? null,
+    prompt_source,
+  }));
 
   return new Response(JSON.stringify({ ...data, reply: finalReply, escalated, escalation_reason, prompt_source }), {
     status,

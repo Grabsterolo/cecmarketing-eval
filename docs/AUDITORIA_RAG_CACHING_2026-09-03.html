@@ -159,7 +159,7 @@ pre code{background:none;border:0;padding:0;font-size:inherit}
   <div>
     <h3 style="margin-top:0">El caching está bien hecho. El RAG es el que no se está ganando su lugar.</h3>
     <p style="font-size:14.5px;margin-top:6px">Las dos piezas están funcionando: no hay nada roto ni caído. Pero se llevan notas muy distintas. <strong>El prompt caching está bien diseñado y la decisión de TTL a 1 hora es correcta</strong> — la validé contra el patrón de tráfico real y ahorra unos <strong>$100 al mes</strong> frente a la alternativa de 5 minutos.</p>
-    <p style="font-size:14.5px">El RAG es otra historia. Medido contra 20 consultas reales de paciente, <strong>en 7 de 20 lo que recupera es ruido</strong>: fragmentos con similitud de 0,30–0,39 que no responden la pregunta y que, al devolver algo, apagan el respaldo que sí la habría respondido. Y todo ese aparato — OpenAI, embeddings, re-indexado, ~300 ms extra por mensaje — está ahorrando alrededor de <strong>$30 al mes</strong>.</p>
+    <p style="font-size:14.5px">El RAG es otra historia. Medido contra <strong>180 consultas reconstruidas de conversaciones reales de WhatsApp</strong>, el umbral actual manda al RAG el 95% de los mensajes y <strong>el 27% del contexto que se inyecta son fragmentos sin relación con la pregunta</strong>. Y todo ese aparato — OpenAI, embeddings, re-indexado, ~300 ms extra por mensaje — está ahorrando alrededor de <strong>$30 al mes</strong>.</p>
     <div class="deltas">
       <span class="pill p-crit">2 críticos</span>
       <span class="pill p-warn">5 altos</span>
@@ -171,13 +171,14 @@ pre code{background:none;border:0;padding:0;font-size:inherit}
 
 <h3>Los tres titulares</h3>
 <ol>
-  <li><strong>El umbral de 0,3 está dentro de la banda de ruido.</strong> El comentario del código lo justifica con una medición del corpus equivocada (fragmento contra fragmento, cuando lo que importa es consulta contra fragmento) y además lo mueve en la dirección contraria a la que el propio commit dice buscar. Subirlo a ~0,45 es el arreglo de mayor impacto y menor riesgo del informe.</li>
+  <li><strong>El umbral de 0,3 está dentro de la banda de ruido.</strong> Sobre 180 consultas reales, el 27% del contexto que se le inyecta a Sofía son fragmentos sin relación con la pregunta. El comentario del código justifica el 0,3 con una medición equivocada (fragmento contra fragmento, cuando importa consulta contra fragmento) y además lo mueve en dirección contraria a la que el propio commit dice buscar. Subirlo a 0,45 es el arreglo de mayor impacto y menor riesgo del informe.</li>
   <li><strong>El RAG ahorra ~$30/mes y cuesta ~300 ms por mensaje.</strong> Porque la base de conocimiento completa va cacheada a $0,20/MTok y los fragmentos del RAG van <em>sin</em> cachear a $2,00/MTok, mandar los 104 fragmentos enteros cuesta apenas el doble que mandar los 6 recuperados. El RAG no es la palanca de costo que parece.</li>
-  <li><strong>Dos endpoints tienen <code>cache_control</code> que nunca cachea.</strong> <code>daily-analysis</code> y <code>audit-sofia</code> marcan un bloque de 72 y 86 tokens; el mínimo cacheable de ese modelo es 1.024. No falla, no avisa: simplemente no hace nada. Da la ilusión de estar optimizado.</li>
+  <li><strong>La búsqueda semántica falla justo con las marcas del CEC.</strong> «Preservé™» no supera 0,45 ni escrito perfecto, aunque la base lo cubra con un fragmento dedicado. Los embeddings no entienden nombres inventados. Es un argumento a favor de subir el umbral: el respaldo es la red que atrapa exactamente esos casos.</li>
+  <li><strong>Dos endpoints tienen <code>cache_control</code> que nunca cachea.</strong> <code>daily-analysis</code> y <code>audit-sofia</code> marcan un bloque de 72 y 86 tokens; el mínimo cacheable de ese modelo es 1.024. No falla, no avisa: simplemente no hace nada.</li>
 </ol>
 
 <div class="note">
-<p><strong>Alcance y de dónde salen los números.</strong> <code>functions/api/chat.js</code> atiende el widget público y «Probar a Sofía». El volumen real de WhatsApp pasa por el Worker <code>cec-sofia-whatsapp</code>, que es un espejo deliberado de este archivo (así lo dice su encabezado). Las cifras de dinero proyectan los <strong>17.337 mensajes de los últimos 30 días</strong> sobre esta lógica. Los tokens están estimados a 3,6 caracteres por token; la tasa de acierto del RAG sale de una muestra de 20 consultas. Son estimaciones de orden de magnitud, no facturación.</p>
+<p><strong>Alcance y de dónde salen los números.</strong> <code>functions/api/chat.js</code> atiende el widget público y «Probar a Sofía». El volumen real de WhatsApp pasa por el Worker <code>cec-sofia-whatsapp</code>, que es un espejo deliberado de este archivo (así lo dice su encabezado). Las cifras de dinero proyectan los <strong>17.337 mensajes de los últimos 30 días</strong> sobre esta lógica, con las tasas de acierto medidas en la sección C. Los tokens están estimados a 3,6 caracteres por token. Son estimaciones de orden de magnitud, no facturación.</p>
 </div>
 </section>
 
@@ -271,16 +272,76 @@ pre code{background:none;border:0;padding:0;font-size:inherit}
 
 <p>Dicho todo eso: <strong>el cambio a 0,3 sí arregló un problema real</strong>, solo que no el que dice el commit. Con 0,5, apenas 6 de mis 20 consultas habrían recuperado algo — el RAG estaba prácticamente muerto y casi todo el tráfico caía al respaldo. Bajar el umbral lo revivió. El error es haberse pasado hasta la banda de ruido.</p>
 
+<h3>Validado contra 180 consultas reales</h3>
+<p>Reconstruí la consulta de búsqueda <em>exactamente</em> como la arma <code>chat.js</code> —los últimos 2 mensajes del usuario concatenados— turno por turno, sobre 400 sesiones reales de WhatsApp: 1.148 turnos, 894 consultas únicas, de las que muestreé 180 (90 primeros turnos y 90 posteriores).</p>
+
+<p>La distribución de la mejor similitud tiene <strong>un valle real justo donde había que cortar</strong>, y eso es lo que convierte al 0,45 en una elección defendible y no en un número inventado:</p>
+
+<div class="simchart">
+  <div class="simrow"><span class="q">0,25 – 0,30</span><span class="track"><i class="bar b-noise" style="width:21.6%"></i></span><span class="v">8</span></div>
+  <div class="simrow"><span class="q">0,30 – 0,35</span><span class="track"><i class="bar b-noise" style="width:67.6%"></i></span><span class="v">25</span></div>
+  <div class="simrow"><span class="q">0,35 – 0,40</span><span class="track"><i class="bar b-noise" style="width:100%"></i></span><span class="v">37</span></div>
+  <div class="simrow"><span class="q">0,40 – 0,45 <strong style="color:var(--dorado)">← el valle</strong></span><span class="track"><i class="bar b-mid" style="width:27.0%"></i></span><span class="v">10</span></div>
+  <div class="simrow"><span class="q">0,45 – 0,50</span><span class="track"><i class="bar b-good" style="width:48.6%"></i></span><span class="v">18</span></div>
+  <div class="simrow"><span class="q">0,50 – 0,55</span><span class="track"><i class="bar b-good" style="width:54.1%"></i></span><span class="v">20</span></div>
+  <div class="simrow"><span class="q">0,55 – 0,60</span><span class="track"><i class="bar b-good" style="width:43.2%"></i></span><span class="v">16</span></div>
+  <div class="simrow"><span class="q">0,60 – 0,65</span><span class="track"><i class="bar b-good" style="width:54.1%"></i></span><span class="v">20</span></div>
+  <div class="simrow"><span class="q">0,65 – 0,70</span><span class="track"><i class="bar b-good" style="width:43.2%"></i></span><span class="v">16</span></div>
+  <div class="simrow"><span class="q">0,70 – 0,75</span><span class="track"><i class="bar b-good" style="width:24.3%"></i></span><span class="v">9</span></div>
+  <div class="legend"><span>Cantidad de consultas en cada banda de similitud (n = 180). Mediana: 0,465.</span></div>
+</div>
+
+<p>Hay dos poblaciones separadas por un hueco: 70 consultas amontonadas por debajo de 0,40, y 99 por encima de 0,45, con apenas 10 en el medio. <strong>El umbral actual de 0,30 no distingue entre las dos.</strong></p>
+
+<p>Y este es el número que importa, porque mide lo que Sofía realmente recibe — no el mejor resultado, sino todos los fragmentos que se le inyectan:</p>
+
+<div class="tw">
+<table>
+<thead><tr><th>Umbral</th><th class="num">Consultas que usan RAG</th><th class="num">Similitud media de lo inyectado</th><th class="num">Del contexto inyectado, cuánto es ruido</th></tr></thead>
+<tbody>
+<tr><td><strong>0,30</strong> <span style="color:var(--muted)">— hoy</span></td><td class="num">171 (95%)</td><td class="num">0,460</td><td class="num"><span class="lvl l-rojo">27%</span></td></tr>
+<tr><td>0,35</td><td class="num">146 (81%)</td><td class="num">0,497</td><td class="num"><span class="lvl l-amar">16%</span></td></tr>
+<tr><td><strong>0,45</strong> <span style="color:var(--muted)">— propuesto</span></td><td class="num">99 (55%)</td><td class="num">0,552</td><td class="num"><span class="lvl l-verde">0%</span></td></tr>
+<tr><td>0,50</td><td class="num">81 (45%)</td><td class="num">0,577</td><td class="num"><span class="lvl l-verde">0%</span></td></tr>
+</tbody>
+</table>
+</div>
+
+<p class="ev" style="border:0;padding:0;margin:0 0 18px;font-size:13px;color:var(--muted)">La última columna es el porcentaje de <em>caracteres</em> inyectados que provienen de fragmentos por debajo de 0,40. Que dé 0% a partir de 0,45 es consecuencia aritmética del propio umbral, no un hallazgo — el hallazgo es el 27% de hoy.</p>
+
 <div class="find c2">
-  <h4><span class="tag t-warn">Alto</span> Subir el umbral a 0,45 y dejar caer al respaldo lo que no llegue</h4>
-  <p>Con 0,45, de mis 20 consultas <strong>11 siguen usando fragmentos</strong> (todas las que nombran un procedimiento, que es donde el RAG brilla) y <strong>9 caen a la base completa</strong> — que resultan ser exactamente las operativas y genéricas, donde la base completa contesta bien. El corte cae en el lugar correcto sin excepciones en la muestra.</p>
-  <p class="ev"><strong>Costo del cambio:</strong> unos <strong>+$11/mes</strong> (más tráfico por la rama de la base completa, que va cacheada y es barata). <strong>Dónde:</strong> <code>functions/api/chat.js:190</code> y el mismo <code>match_threshold</code> en el Worker. Recomiendo validar con 30–40 consultas reales sacadas de <code>sofia_conversations</code> antes de fijar el número definitivo entre 0,42 y 0,48.</p>
+  <h4><span class="tag t-warn">Alto</span> Subir el umbral a 0,45</h4>
+  <p>Sobre las 180 consultas reales: pasan de <strong>95% a 55%</strong> las que usan fragmentos, la similitud media de lo inyectado sube de 0,460 a 0,552, y <strong>desaparece el 27% de contexto basura</strong>. Las 81 consultas que caen al respaldo reciben la base completa, que contiene todo lo que contenían los fragmentos — nunca menos información.</p>
+  <p class="ev"><strong>Costo del cambio:</strong> <strong>+$14/mes</strong> con las tasas reales medidas ($48 → $62 mensuales de entrada). <strong>Dónde:</strong> <code>functions/api/chat.js:190</code> y el mismo <code>match_threshold</code> en el Worker. <strong>El riesgo a vigilar</strong> es la dilución: el respaldo son 22.700 tokens contra 1.400, y aunque contiene la respuesta, el modelo tiene que encontrarla. Con Sonnet 5 ese riesgo es bajo y ya está probado en producción — hoy el 5% del tráfico toma esa rama — pero es lo que hay que mirar en las primeras conversaciones después del cambio.</p>
+</div>
+
+<div class="find c1">
+  <h4><span class="tag t-crit">Crítico</span> La búsqueda semántica es mala justo con las marcas propias del CEC</h4>
+  <p>Este salió al revisar los mensajes reales y es el hallazgo que más me sorprendió. Los pacientes preguntan por <strong>Preservé™</strong> —la técnica de aumento mamario del Dr. Chacón— 31 veces en 1.500 sesiones. La base de conocimiento la cubre bien: hay un fragmento dedicado de 2.543 caracteres. Y aun así la búsqueda no lo encuentra:</p>
+  <div class="tw" style="margin:12px 0">
+  <table>
+  <thead><tr><th>Consulta</th><th class="num">Similitud del fragmento correcto</th></tr></thead>
+  <tbody>
+  <tr><td><code>Cual es el costo aprox de preserve?</code> <span style="color:var(--muted)">— como lo escribe el paciente</span></td><td class="num"><span class="lvl l-rojo">0,352</span></td></tr>
+  <tr><td><code>Cuál es el costo aproximado de Preservé™?</code> <span style="color:var(--muted)">— perfectamente escrito</span></td><td class="num"><span class="lvl l-amar">0,446</span></td></tr>
+  <tr><td><code>Preservé</code> <span style="color:var(--muted)">— solo el término</span></td><td class="num"><span class="lvl l-rojo">0,237</span></td></tr>
+  </tbody>
+  </table>
+  </div>
+  <p>Ni escribiéndolo perfecto llega a 0,45. <strong>No es un problema de tildes ni de ortografía: es que los embeddings no entienden marcas registradas.</strong> «Preservé» no significa nada para el modelo — no es una palabra del español con sentido propio, es un nombre inventado por el CEC. Lo mismo pasa con las variantes de escritura: <code>lipopapada</code> junto da 0,390 y <code>lipo de papada</code> separado da 0,648, por un espacio. Los pacientes lo escriben junto 61 veces.</p>
+  <p class="ev"><strong>Y acá está lo importante: esto refuerza el cambio de umbral, no lo contradice.</strong> Con 0,45 estas consultas caen al respaldo, que contiene la sección de Preservé™ completa — así que Sofía sigue contestando bien. El respaldo no es un modo degradado: <strong>es la red que atrapa exactamente aquello en lo que la búsqueda semántica es peor</strong>, que son los nombres propios de la clínica. Hoy funciona por accidente, porque el umbral laxo deja pasar el fragmento en segunda posición.</p>
+</div>
+
+<div class="find c3">
+  <h4><span class="tag t-info">Medio</span> Se buscan y se cobran los mensajes que no tienen texto</h4>
+  <p>El 1,7% de los mensajes de paciente son el literal <code>[mensaje sin texto]</code> — notas de voz, imágenes y stickers que llegan sin transcripción. Se embeben en OpenAI, se buscan contra el índice, recuperan seis fragmentos al azar y se le mandan a Claude. Unos 290 mensajes al mes haciendo el viaje completo para nada.</p>
+  <p class="ev">Detectarlos antes de embeber y saltarse el RAG es un <code>if</code>. Vale más por lo que le quita de encima a Sofía que por el dinero.</p>
 </div>
 
 <div class="find c3">
   <h4><span class="tag t-info">Medio</span> Recortar la cola: seis fragmentos fijos casi siempre son demasiados</h4>
   <p><code>match_count: 6</code> es fijo, sin importar qué tan buenos sean los resultados. En «cuanto vale una abdominoplastia» el primero da 0,57 y el sexto 0,42: los últimos tres no aportan. Se inyectan 7.402 caracteres para usar unos 1.500.</p>
-  <p>Un corte relativo — descartar todo lo que esté más de ~0,12 por debajo del mejor resultado — recorta aproximadamente a la mitad los tokens inyectados y quita distractores del contexto. Es una línea de código sobre el arreglo del umbral.</p>
+  <p>Medido sobre las 180 consultas reales, con umbral 0,45: un corte relativo —descartar lo que esté más de 0,12 por debajo del mejor resultado— baja de 5,1 a 4,5 fragmentos y recorta un <strong>12% de los caracteres inyectados</strong>. Menos de lo que esperaba, pero quita distractores y es una línea de código sobre el arreglo del umbral.</p>
 </div>
 
 <div class="find c3">
@@ -302,23 +363,23 @@ pre code{background:none;border:0;padding:0;font-size:inherit}
 Rama respaldo ~22.700 tokens cacheados × $0,20/MTok   = $0,00454 por mensaje
                                             diferencia = $0,00204</code></pre>
 
-<p>Es decir: <strong>mandar la base de conocimiento entera cuesta menos del doble que mandar los 6 fragmentos recuperados.</strong> Proyectado sobre 17.337 mensajes al mes:</p>
+<p>Es decir: <strong>mandar la base de conocimiento entera cuesta menos del doble que mandar los 6 fragmentos recuperados.</strong> Proyectado sobre 17.337 mensajes al mes, con las tasas de acierto reales de la sección C (solo el costo de entrada, sin contar la salida):</p>
 
 <div class="costs">
   <div class="crow">
     <div><div class="lbl">Sin RAG</div><div class="st">Siempre la base completa, cacheada a 1 h</div></div>
     <div class="cbar"><i style="width:100%"></i></div>
-    <div class="v">~$151</div>
+    <div class="v">~$79</div>
   </div>
   <div class="crow best">
-    <div><div class="lbl">Umbral 0,45</div><div class="st">RAG cuando hay coincidencia clara, respaldo si no</div></div>
-    <div class="cbar"><i style="width:87%"></i></div>
-    <div class="v">~$132</div>
+    <div><div class="lbl">Umbral 0,45</div><div class="st">RAG en el 55% de los mensajes, respaldo en el resto</div></div>
+    <div class="cbar"><i style="width:79%"></i></div>
+    <div class="v">~$62</div>
   </div>
   <div class="crow">
-    <div><div class="lbl">Hoy (umbral 0,3)</div><div class="st">RAG en ~85% de los mensajes, ruido incluido</div></div>
-    <div class="cbar"><i style="width:80%"></i></div>
-    <div class="v">~$121</div>
+    <div><div class="lbl">Hoy (umbral 0,30)</div><div class="st">RAG en el 95%, con 27% de contexto basura</div></div>
+    <div class="cbar"><i style="width:61%"></i></div>
+    <div class="v">~$48</div>
   </div>
 </div>
 
@@ -471,11 +532,12 @@ Rama respaldo ~22.700 tokens cacheados × $0,20/MTok   = $0,00454 por mensaje
 <div class="phase">
   <p class="when">Primero · una tarde</p>
   <ol>
-    <li><strong>Subir <code>match_threshold</code> a 0,45</strong> en <code>chat.js</code> y en el Worker. Antes de fijarlo, sacar 30–40 primeros mensajes reales de <code>sofia_conversations</code> y correr la misma prueba de esta auditoría para ajustar el número entre 0,42 y 0,48. Es el cambio de mayor impacto del informe.</li>
+    <li><strong>Subir <code>match_threshold</code> a 0,45</strong> en <code>chat.js</code> y en el Worker. Ya validado contra 180 consultas reales (sección C): el número no necesita más calibración. Es el cambio de mayor impacto del informe.</li>
     <li><strong>Registrar <code>usage</code> de caché</strong> en los tres endpoints. Sin esto no hay forma de saber si algo de lo demás funciona.</li>
     <li><strong><code>console.error</code> en el <code>catch</code> del RAG.</strong> Una línea.</li>
     <li><strong>Quitar el <code>cache_control</code> muerto</strong> de <code>daily-analysis.js</code> y <code>audit-sofia.js</code>, junto con su header beta.</li>
     <li><strong>Borrar <code>scripts/index-knowledge.js</code></strong>, que está roto y duplicado.</li>
+    <li><strong>Saltarse el RAG cuando el mensaje es <code>[mensaje sin texto]</code></strong> — un <code>if</code> que ahorra ~290 viajes mensuales a OpenAI y le quita ruido a Sofía.</li>
   </ol>
 </div>
 
@@ -487,6 +549,7 @@ Rama respaldo ~22.700 tokens cacheados × $0,20/MTok   = $0,00454 por mensaje
     <li><strong>Re-indexado atómico y por lotes</strong>, para que un fallo a mitad de camino no deje el índice vacío.</li>
     <li><strong>Recorte relativo de la cola de fragmentos</strong> (descartar lo que esté &gt;0,12 por debajo del mejor) y deduplicar por categoría.</li>
     <li><strong>Incluir el último turno del asistente</strong> en el texto que se embebe, para que los seguimientos cortos encuentren el tema.</li>
+    <li><strong>Agregar las variantes de escritura a la base de conocimiento</strong> — «lipopapada» junto a «lipo de papada», y los nombres de marca con y sin tilde. Es la única forma de mejorar la recuperación de nombres propios sin cambiar de tecnología.</li>
     <li><strong>Reintentar solo errores transitorios</strong> en <code>callClaudeWithRetry</code>.</li>
   </ol>
 </div>
@@ -511,12 +574,13 @@ Rama respaldo ~22.700 tokens cacheados × $0,20/MTok   = $0,00454 por mensaje
 <h2><span class="ltr">J</span> Cómo se midió</h2>
 <p>Todo lo que este informe afirma sale de producción, no de leer el código:</p>
 <ul>
-  <li><strong>Recuperación:</strong> 20 consultas escritas como paciente, embebidas con <code>text-embedding-3-small</code> y corridas contra <code>match_sofia_chunks</code> en el proyecto de Supabase real, con los parámetros de <code>chat.js</code>. Se registró posición, similitud y caracteres inyectados de cada resultado.</li>
+  <li><strong>Recuperación:</strong> 400 sesiones reales de <code>sofia_whatsapp_sessions</code>, de las que se reconstruyó la consulta de búsqueda turno por turno tal como la arma <code>chat.js:149-153</code> (los últimos 2 mensajes del usuario). De 1.148 turnos y 894 consultas únicas se muestrearon 180, estratificadas entre primeros turnos y posteriores. Cada una embebida con <code>text-embedding-3-small</code> y corrida contra <code>match_sofia_chunks</code> en producción. Nunca se consultó <code>phone_number</code> ni <code>phone_hash</code>.</li>
+  <li><strong>Cobertura de términos:</strong> 1.500 sesiones, contrastando las palabras frecuentes de los pacientes contra el texto de la base de conocimiento.</li>
   <li><strong>Piso de ruido:</strong> los 5.356 pares posibles entre los 104 fragmentos, comparados con <code>1 - (embedding &lt;=&gt; embedding)</code> en la base.</li>
   <li><strong>Multi-turno:</strong> 4 escenarios corridos dos veces cada uno — solo el último mensaje contra los últimos dos concatenados — para aislar el efecto de la concatenación.</li>
   <li><strong>Sincronía del índice:</strong> se ejecutó el chunker de <code>reindex.js</code> contra la base de conocimiento en vivo y se comparó el resultado, normalizado, contra las 104 filas de la tabla.</li>
   <li><strong>Tráfico y TTL:</strong> <code>sofia_interaction_dedup</code> (17.337 mensajes / 30 días) y <code>sofia_whatsapp_sessions</code> (8.569 sesiones), más la distribución de huecos entre conversaciones consecutivas de los últimos 14 días.</li>
-  <li><strong>Costos:</strong> tarifas de Sonnet 5 ($2,00 entrada / $10,00 salida por MTok; lectura de caché 0,1× ; escritura a 1 h 2×). Tokens estimados a 3,6 caracteres por token sobre longitudes reales medidas en la base. Son estimaciones de orden de magnitud.</li>
+  <li><strong>Costos:</strong> tarifas de Sonnet 5 ($2,00 entrada / $10,00 salida por MTok; lectura de caché 0,1× ; escritura a 1 h 2×). Tokens estimados a 3,6 caracteres por token sobre longitudes reales medidas en la base, y tasas de acierto medidas sobre las 180 consultas. Son estimaciones de orden de magnitud.</li>
 </ul>
 </section>
 
