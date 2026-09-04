@@ -7,6 +7,7 @@ import { EmptyState } from "../ui/EmptyState.jsx";
 import { SectionHeader } from "../ui/SectionHeader.jsx";
 import { Button } from "../ui/Button.jsx";
 import { supabase } from "../../lib/supabase.js";
+import { fetchApiAutenticado } from "../../lib/api.js";
 
 const formatDate = (dateStr) => {
   if (!dateStr) return "";
@@ -163,12 +164,7 @@ export function RecommendationsSection() {
   const generateAnalysis = async () => {
     setGenerating(true);
     try {
-      const res = await fetch("/api/daily-analysis", {
-        method: "POST",
-        headers: { "x-sofia-secret": import.meta.env.VITE_SOFIA_SECRET },
-      });
-      const data = await res.json();
-      if (data.error) throw new Error(data.error);
+      await fetchApiAutenticado("/api/daily-analysis", { method: "POST" });
       const { data: newData } = await supabase
         .from("sofia_recommendations")
         .select("*")

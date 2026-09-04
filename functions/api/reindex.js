@@ -1,10 +1,11 @@
+import { exigirSesion } from "./_auth.js";
+
 export async function onRequestPost({ request, env }) {
-  if (request.headers.get("x-sofia-secret") !== env.SOFIA_CHAT_SECRET) {
-    return new Response(JSON.stringify({ error: "Unauthorized" }), {
-      status: 401,
-      headers: { "content-type": "application/json" },
-    });
-  }
+  // Solo el dashboard llama acá, siempre con un usuario logueado detrás.
+  // Antes esto se protegía con x-sofia-secret, que es público por
+  // construcción — ver el encabezado de _auth.js.
+  const noAutorizado = await exigirSesion(env, request);
+  if (noAutorizado) return noAutorizado;
 
   const SUPABASE_URL = env.SUPABASE_URL;
   const SERVICE_KEY = env.SUPABASE_SERVICE_ROLE_KEY;
