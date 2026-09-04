@@ -359,31 +359,45 @@ pre code{background:none;border:0;padding:0;font-size:inherit}
 
 <p>Acá está el resultado que menos esperaba. La rama del respaldo manda la base completa <strong>cacheada</strong>; la rama del RAG manda los fragmentos <strong>sin cachear</strong> (correcto: cambian en cada consulta). Y las tarifas de esas dos cosas son muy distintas: lectura de caché cuesta $0,20 por millón de tokens, entrada normal cuesta $2,00. Diez veces más.</p>
 
-<pre><code>Rama RAG      ~1.250 tokens sin cachear × $2,00/MTok  = $0,00250 por mensaje
-Rama respaldo ~22.700 tokens cacheados × $0,20/MTok   = $0,00454 por mensaje
-                                            diferencia = $0,00204</code></pre>
+<div class="note" style="border-color:var(--warn-bd);background:var(--warn-bg)">
+<p><strong>Corregido el 2026-09-04.</strong> Las cifras de tokens de la versión anterior de esta sección estaban un 38% por debajo: estimé 3,6 caracteres por token y el ratio real de este corpus es <strong>2,31</strong>. El español con markdown y marcas registradas («Preservé™», «HArmonyCA™») se fragmenta mucho más de lo que asumí. Los números de abajo ya no son estimaciones: son los que <strong>reporta la propia API</strong> en el log <code>SOFIA_USAGE</code>.</p>
+</div>
 
-<p>Es decir: <strong>mandar la base de conocimiento entera cuesta menos del doble que mandar los 6 fragmentos recuperados.</strong> Proyectado sobre 17.337 mensajes al mes, con las tasas de acierto reales de la sección C (solo el costo de entrada, sin contar la salida):</p>
+<div class="tw">
+<table>
+<thead><tr><th>Bloque</th><th class="num">Caracteres</th><th class="num">Estimé</th><th class="num">Real (API)</th></tr></thead>
+<tbody>
+<tr><td><code>system_prompt</code></td><td class="num">27.842</td><td class="num">7.734</td><td class="num"><strong>11.484</strong></td></tr>
+<tr><td>Base de conocimiento completa</td><td class="num">81.676</td><td class="num">22.688</td><td class="num"><strong>34.615</strong></td></tr>
+<tr><td>Sección 6 (promociones)</td><td class="num">4.463</td><td class="num">1.240</td><td class="num"><strong>2.085</strong></td></tr>
+</tbody>
+</table>
+</div>
+
+<pre><code>Rama RAG      ~2.110 tokens sin cachear × $2,00/MTok  = $0,00422 por mensaje
+Rama respaldo ~34.615 tokens cacheados × $0,20/MTok   = $0,00692 por mensaje</code></pre>
+
+<p>Es decir: <strong>mandar la base de conocimiento entera cuesta menos del doble que mandar los 6 fragmentos recuperados.</strong> Proyectado sobre 17.337 mensajes al mes, con la tasa de acierto real medida en producción —69% RAG / 31% respaldo, no el 55/45 que estimé— y solo el costo de entrada:</p>
 
 <div class="costs">
   <div class="crow">
-    <div><div class="lbl">Sin RAG</div><div class="st">Siempre la base completa, cacheada a 1 h</div></div>
+    <div><div class="lbl">Sin prompt caching</div><div class="st">El mismo prompt, pagado a precio de entrada nueva</div></div>
     <div class="cbar"><i style="width:100%"></i></div>
-    <div class="v">~$79</div>
-  </div>
-  <div class="crow best">
-    <div><div class="lbl">Umbral 0,45</div><div class="st">RAG en el 55% de los mensajes, respaldo en el resto</div></div>
-    <div class="cbar"><i style="width:79%"></i></div>
-    <div class="v">~$62</div>
+    <div class="v">~$883</div>
   </div>
   <div class="crow">
-    <div><div class="lbl">Hoy (umbral 0,30)</div><div class="st">RAG en el 95%, con 27% de contexto basura</div></div>
-    <div class="cbar"><i style="width:61%"></i></div>
-    <div class="v">~$48</div>
+    <div><div class="lbl">Sin RAG</div><div class="st">Siempre la base completa, cacheada a 1 h</div></div>
+    <div class="cbar"><i style="width:20%"></i></div>
+    <div class="v">~$172</div>
+  </div>
+  <div class="crow best">
+    <div><div class="lbl">Hoy — RAG + caching</div><div class="st">RAG en el 69% de los mensajes, respaldo en el resto</div></div>
+    <div class="cbar"><i style="width:16%"></i></div>
+    <div class="v">~$145</div>
   </div>
 </div>
 
-<p>Todo el aparato del RAG — la dependencia de OpenAI, la tabla de embeddings, el pipeline de re-indexado, la llamada extra de ~300 ms en cada mensaje — está comprando <strong>unos $30 al mes</strong>. Y los está comprando a cambio de las respuestas de peor calidad de la sección B.</p>
+<p>Todo el aparato del RAG — la dependencia de OpenAI, la tabla de embeddings, el pipeline de re-indexado, la llamada extra de ~300 ms en cada mensaje — está comprando <strong>unos $27 al mes, el 16% de la factura</strong>. El <strong>prompt caching, en cambio, ahorra $738 al mes: el 84%.</strong> Son dos cosas de escala completamente distinta, y conviene no confundirlas.</p>
 
 <p>La lectura no es «hay que quitar el RAG». Es que <strong>el RAG no es una palanca de costo, es una palanca de precisión</strong>, y hay que evaluarlo como tal. Donde acierta (procedimientos nombrados) enfoca el contexto y mejora la respuesta; donde falla, hay que dejarlo caer al respaldo sin miedo, porque el respaldo casi no cuesta. Eso es exactamente lo que hace subir el umbral a 0,45: se pagan $11 más al mes y se compran respuestas correctas en las preguntas operativas.</p>
 
