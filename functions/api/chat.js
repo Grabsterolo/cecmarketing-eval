@@ -337,6 +337,29 @@ export async function onRequestPost({ request, env }) {
       console.error("[sofia_chat] no se pudo extraer la sección 6 del knowledge_base");
     }
 
+    // NO LE PONGAS cache_control A ESTE BLOQUE.
+    //
+    // Es el único bloque grande sin cachear y es tentador "unificarlo" con
+    // los de arriba. Medido el 2026-09-04 sobre 12.519 consultas reales: solo
+    // el 26% se repite, así que el 74% pagaría ESCRITURA de caché en vez de
+    // lectura. Los fragmentos cambian con cada consulta — ese es justamente el
+    // punto del RAG.
+    //
+    //   hoy, sin cachear ........ 1.00x   ← lo correcto
+    //   con ttl "1h" ............ 1.50x   ← +$25/mes, la trampa
+    //   con ttl 5min ............ 0.95x   ← 5% mejor, no vale la complejidad
+    //
+    // El "1h" es la trampa concreta porque es el TTL que usan los otros
+    // bloques: copiarlo de ahí parece consistencia y es un 50% más caro sobre
+    // la línea MÁS CARA de la factura (~$50/mes, el 30% del total).
+    //
+    // Para bajar esta línea el camino no es cachear, es inyectar menos texto.
+    // Ojo con eso también: bajar match_count de 6 a 4 ahorraría ~$17/mes pero
+    // los fragmentos 5 y 6 NO son ruido — la similitud cae de 0,602 en el #1
+    // a 0,529 en el #6, apenas 0,094. Se perdería contexto bueno en el 81% de
+    // las consultas. Lo que sí es seguro es el corte relativo (descartar lo
+    // que esté >0,12 por debajo del mejor), que solo se activa en el 19% de
+    // los casos, donde hay un salto real.
     systemBlocks.push({
       type: "text",
       text: "BASE DE CONOCIMIENTO RELEVANTE PARA ESTA CONSULTA:\n\n" +
