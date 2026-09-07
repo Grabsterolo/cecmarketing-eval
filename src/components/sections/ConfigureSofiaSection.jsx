@@ -172,6 +172,11 @@ export function ConfigureSofiaSection() {
   const [systemPrompt, setSystemPrompt] = useState("");
   const [knowledge, setKnowledge] = useState("");
   const [whatsappEnabled, setWhatsappEnabled] = useState(true);
+  // Arranca en false, no en true: si la lectura falla o la columna todavía no
+  // existe, lo seguro es mostrar el seguimiento apagado. Al revés que Sofía,
+  // donde lo seguro es asumir que está contestando.
+  const [followupEnabled, setFollowupEnabled] = useState(false);
+  const [togglingFollowup, setTogglingFollowup] = useState(false);
   const [togglingWhatsapp, setTogglingWhatsapp] = useState(false);
   const [loading, setLoading] = useState(true);
   const [savingField, setSavingField] = useState(null);
@@ -189,7 +194,7 @@ export function ConfigureSofiaSection() {
       // implementación al final del archivo para el SQL de creación.
       const { data, error: fetchError } = await supabase
         .from("sofia_config")
-        .select("system_prompt, knowledge_base, whatsapp_enabled")
+        .select("system_prompt, knowledge_base, whatsapp_enabled, followup_enabled")
         .eq("id", 1)
         .maybeSingle();
       if (!mounted) return;
@@ -199,6 +204,7 @@ export function ConfigureSofiaSection() {
         setSystemPrompt(data.system_prompt || "");
         setKnowledge(data.knowledge_base || "");
         setWhatsappEnabled(data.whatsapp_enabled ?? true);
+        setFollowupEnabled(data.followup_enabled ?? false);
       }
       setLoading(false);
     }
@@ -217,6 +223,21 @@ export function ConfigureSofiaSection() {
     setTogglingWhatsapp(false);
     if (toggleError) {
       setWhatsappEnabled(!next);
+      setError(toggleError.message);
+    }
+  }
+
+  async function handleToggleFollowup() {
+    const next = !followupEnabled;
+    setFollowupEnabled(next);
+    setTogglingFollowup(true);
+    const { error: toggleError } = await supabase
+      .from("sofia_config")
+      .update({ followup_enabled: next, updated_at: new Date().toISOString() })
+      .eq("id", 1);
+    setTogglingFollowup(false);
+    if (toggleError) {
+      setFollowupEnabled(!next);
       setError(toggleError.message);
     }
   }
@@ -329,6 +350,63 @@ export function ConfigureSofiaSection() {
             >
               <span style={{
                 position: "absolute", top: 3, left: whatsappEnabled ? 29 : 3,
+                width: 24, height: 24, borderRadius: "50%", background: "#fff",
+                transition: "left 0.15s",
+                boxShadow: "0 1px 3px rgba(0,0,0,0.3)",
+              }} />
+            </button>
+          </Card>
+
+          {/* Interruptor aparte del de Sofía: "que conteste" y "que escriba
+              primero" son dos decisiones distintas. Se puede querer a Sofía al
+              aire sin que inicie conversaciones. Apagar esto no la calla. */}
+          <Card style={{
+            display: "flex", alignItems: "center", justifyContent: "space-between",
+            gap: 16, padding: "16px 24px",
+            background: followupEnabled ? "rgba(31,74,64,0.06)" : COLORS.panelAlt,
+            border: `1.5px solid ${followupEnabled ? COLORS.green : COLORS.border}`,
+          }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
+              <div style={{
+                width: 42, height: 42, borderRadius: "50%", flexShrink: 0,
+                background: followupEnabled ? COLORS.green : COLORS.textMuted,
+                display: "flex", alignItems: "center", justifyContent: "center",
+                transition: "background 0.15s",
+              }}>
+                <Send size={18} color="#fff" />
+              </div>
+              <div>
+                <h4 style={{
+                  margin: 0, fontWeight: 700, fontSize: 15,
+                  color: followupEnabled ? COLORS.green : COLORS.text,
+                }}>
+                  {followupEnabled ? "Seguimiento activado" : "Seguimiento desactivado"}
+                </h4>
+                <p style={{ margin: "2px 0 0", fontSize: 13, color: COLORS.textMuted, lineHeight: 1.5 }}>
+                  {followupEnabled
+                    ? "Escribe una vez, unas 2 horas después de su último mensaje, a quien dejó de responder. Nunca a conversaciones que ya tomó un asesor."
+                    : "Sofía solo responde; no escribe primero a nadie."}
+                </p>
+              </div>
+            </div>
+            <button
+              onClick={handleToggleFollowup}
+              disabled={togglingFollowup || !whatsappEnabled}
+              role="switch"
+              aria-checked={followupEnabled}
+              aria-label="Activar o desactivar el seguimiento automático de Sofía"
+              title={!whatsappEnabled ? "Sofía está en pausa: no puede escribir primero." : undefined}
+              style={{
+                position: "relative", width: 56, height: 30, borderRadius: 999,
+                border: "none", flexShrink: 0,
+                cursor: togglingFollowup ? "wait" : !whatsappEnabled ? "not-allowed" : "pointer",
+                background: followupEnabled ? COLORS.green : COLORS.textMuted,
+                opacity: togglingFollowup || !whatsappEnabled ? 0.5 : 1,
+                transition: "background 0.15s",
+              }}
+            >
+              <span style={{
+                position: "absolute", top: 3, left: followupEnabled ? 29 : 3,
                 width: 24, height: 24, borderRadius: "50%", background: "#fff",
                 transition: "left 0.15s",
                 boxShadow: "0 1px 3px rgba(0,0,0,0.3)",
