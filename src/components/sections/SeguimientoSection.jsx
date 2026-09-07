@@ -30,7 +30,18 @@ const FETCH_PAGE_SIZE = 1000;
 // Nmin" de cada tarjeta.
 const QUEUE_COLUMNS = "id, phone_number, phone_hash, procedure_interest, procedure_code, escalation_reason, channel, message_count, sentiment, created_at, prospect_id, origen, categoria, score, estado, nota, actualizado_por, estado_actualizado_en";
 
-const ORIGEN_LABEL = { escalada_sin_cita: "Escalada sin cita", cerrada_sin_escalar: "Cerrada sin escalar" };
+// "Escalada por otro motivo" son escalaciones clínicas reales (contraindicación,
+// lactancia, pérdida de peso en curso) que hasta el 2026-09-07 no llegaban acá:
+// la vista las filtraba por palabras del motivo y estas no las tenían. Score
+// promedio 69, prácticamente igual que "Escalada sin cita".
+// "Escalada técnica" la disparó el sistema (tope de mensajes, falla de Claude,
+// frase de traspaso sin etiqueta), no el paciente — se puede filtrar aparte.
+const ORIGEN_LABEL = {
+  escalada_sin_cita: "Escalada sin cita",
+  escalada_otro_motivo: "Escalada por otro motivo",
+  escalada_tecnica: "Escalada técnica",
+  cerrada_sin_escalar: "Cerrada sin escalar",
+};
 const CATEGORIA_LABEL = { cirugia: "Cirugía", tratamiento_no_quirurgico: "No quirúrgico" };
 const ESTADO_LABEL = {
   pendiente: "Pendiente", contactado: "Contactado", agendo: "Agendó",
@@ -208,6 +219,8 @@ function FilterBar({
         <select value={origen} onChange={(e) => setOrigen(e.target.value)} style={SELECT_STYLE}>
           <option value="todos">Origen: todos</option>
           <option value="escalada_sin_cita">Escalada sin cita</option>
+          <option value="escalada_otro_motivo">Escalada por otro motivo</option>
+          <option value="escalada_tecnica">Escalada técnica</option>
           <option value="cerrada_sin_escalar">Cerrada sin escalar</option>
         </select>
 
