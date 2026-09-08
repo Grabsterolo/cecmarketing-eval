@@ -109,7 +109,12 @@ export function PacientesSection() {
     if (codes) q = q.in("procedure_code", codes);
     if (contacto === "con") q = q.not("telefono", "is", null);
     if (contacto === "sin") q = q.is("telefono", null);
-    if (busquedaAplicada) q = q.ilike("telefono", `%${busquedaAplicada}%`);
+    // Buscar solo por teléfono servía cuando era lo único que había. Ahora que
+    // hay nombre, quien tiene a alguien al teléfono va a escribir el nombre.
+    if (busquedaAplicada) {
+      const t = busquedaAplicada.replace(/[,()]/g, "");
+      q = q.or(`telefono.ilike.%${t}%,nombre.ilike.%${t}%`);
+    }
     return q;
   }, [procedimiento, contacto, busquedaAplicada]);
 
@@ -123,7 +128,7 @@ export function PacientesSection() {
       const [datos, conteo] = await Promise.all([
         aplicarFiltros(
           supabase.from("sofia_pacientes").select(
-            "phone_hash, telefono, prospect_id, procedure_code, sentiment, alguna_vez_escalada, mensajes, ultima_actividad, primer_contacto"
+            "phone_hash, telefono, nombre, prospect_id, procedure_code, sentiment, alguna_vez_escalada, mensajes, ultima_actividad, primer_contacto"
           )
         ).order("ultima_actividad", { ascending: false }).range(desde, desde + PAGE_SIZE - 1),
         aplicarFiltros(supabase.from("sofia_pacientes").select("phone_hash", { count: "exact", head: true })),
@@ -197,7 +202,7 @@ export function PacientesSection() {
         <input
           value={busqueda}
           onChange={(e) => setBusqueda(e.target.value)}
-          placeholder="Buscar por teléfono..."
+          placeholder="Buscar por nombre o teléfono..."
           style={{
             background: COLORS.inputBg, border: `1.5px solid ${COLORS.border}`,
             borderRadius: 8, padding: "8px 12px", color: COLORS.text, fontSize: 13,
@@ -227,9 +232,9 @@ export function PacientesSection() {
             <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13, fontFamily: "'Manrope', sans-serif" }}>
               <thead>
                 <tr>
-                  {["Teléfono", "Interés", "Mensajes", "Última actividad", "Primer contacto", ""].map((h, i) => (
+                  {["Paciente", "Teléfono", "Interés", "Mensajes", "Última actividad", "Primer contacto", ""].map((h, i) => (
                     <th key={h || i} style={{
-                      textAlign: i === 2 ? "right" : "left",
+                      textAlign: i === 3 ? "right" : "left",
                       padding: "14px 16px",
                       fontSize: 11, letterSpacing: "0.08em", textTransform: "uppercase",
                       color: COLORS.textMuted, fontWeight: 700,
@@ -243,6 +248,13 @@ export function PacientesSection() {
                   const generico = !f.procedure_code || NO_ES_PROCEDIMIENTO.has(f.procedure_code);
                   return (
                     <tr key={f.phone_hash}>
+                      {/* El nombre solo existe desde el 2026-09-08 (lo llena el
+                          Worker desde Zenvia en cada mensaje entrante). El
+                          histórico queda vacío hasta que se decida rellenarlo,
+                          así que la celda tiene que verse bien sin dato. */}
+                      <td style={{ padding: "12px 16px", borderBottom: `1px solid ${COLORS.border}`, fontWeight: f.nombre ? 600 : 400 }}>
+                        {f.nombre || <span style={{ color: COLORS.textMuted }}>—</span>}
+                      </td>
                       <td style={{ padding: "12px 16px", borderBottom: `1px solid ${COLORS.border}` }}>
                         <TelefonoCell telefono={f.telefono} />
                       </td>
