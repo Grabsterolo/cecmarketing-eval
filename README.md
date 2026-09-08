@@ -240,6 +240,36 @@ Dos cosas deliberadas de esa taxonomía:
 - **La regla de MIA usa `\ymia\y`** (límite de palabra). Sin eso captura
   bichectoMIA, mastectoMIA y lipectoMIA.
 
+### Seguimiento proactivo de Sofía (desde el 2026-09-07)
+
+Sofía le escribe **una vez, y para siempre**, a quien se calló ~2 h después de
+hablar con ella. El código vive en el Worker `cec-sofia-whatsapp` (§ 2b de su
+README, que tiene el detalle completo); acá va lo que toca a este repo.
+
+**Se prende y se apaga desde el dashboard.** Configurar a Sofía tiene un toggle
+"Seguimiento" debajo del de "Sofía al aire", sobre `sofia_config.followup_enabled`.
+**Default false**: desplegar el Worker no debe empezar a mandarle mensajes a
+nadie. Si Sofía está en pausa el toggle se deshabilita — un bot que no puede
+responder tampoco debe poder escribir primero.
+
+**Tabla nueva `sofia_followup_messages`**, un registro por persona. La PK es
+`phone_hash` y no `conversation_id` a propósito: un paciente que vuelve no
+genera fila nueva, y la regla que se quiere es un mensaje por PERSONA. Trae
+`fallback_reason` (por qué un mensaje salió genérico) y `tokens_in/out` (costo
+real, no estimado).
+
+**Cómo se mide si sirve.** Cruzar `sofia_followup_messages` con
+`derived_to_appointment` responde la única pregunta que importa: si el
+seguimiento produce citas o solo respuestas. Para eso se conectó el write-back
+(migración `20260907120000`) — antes esa columna estaba en 0 en las 11.940 filas.
+
+Al 2026-09-08: 34 enviados, 4 respuestas (15,4%), 1 escaló a un asesor, 0
+agendados. Muestra chica; volver a mirarlo con 200-300 enviados.
+
+**Costo:** ~$10/mes (Haiku para redactar, más las conversaciones que se
+reabren), contra una factura de entrada de ~$88/mes. Lo que no está medido es
+lo que cobre Zenvia por mensaje — ese contrato no está a la vista.
+
 ### Lo que NO se puede medir hoy, y por qué
 
 - **Conversión a paciente.** `derived_to_appointment` sigue en 0 en todas las
