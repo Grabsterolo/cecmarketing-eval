@@ -28,7 +28,7 @@ const FETCH_PAGE_SIZE = 1000;
 // la vista (migración 20260902231711) — cuándo alguien del equipo tocó el
 // estado, NO cuándo se actualizó la conversación. Se usa para el "por X · hace
 // Nmin" de cada tarjeta.
-const QUEUE_COLUMNS = "id, phone_number, phone_hash, procedure_interest, procedure_code, escalation_reason, channel, message_count, sentiment, created_at, prospect_id, origen, categoria, score, estado, nota, actualizado_por, estado_actualizado_en, urgente";
+const QUEUE_COLUMNS = "id, phone_number, phone_hash, procedure_interest, procedure_code, escalation_reason, channel, message_count, sentiment, created_at, prospect_id, origen, categoria, score, estado, nota, actualizado_por, estado_actualizado_en, urgente, esperar_hasta";
 
 // "Escalada por otro motivo" son escalaciones clínicas reales (contraindicación,
 // lactancia, pérdida de peso en curso) que hasta el 2026-09-07 no llegaban acá:
@@ -45,9 +45,18 @@ const ORIGEN_LABEL = {
 const CATEGORIA_LABEL = { cirugia: "Cirugía", tratamiento_no_quirurgico: "No quirúrgico" };
 const ESTADO_LABEL = {
   pendiente: "Pendiente", contactado: "Contactado", agendo: "Agendó",
-  descartado: "Descartado", no_contactable: "No contactable",
+  en_espera: "En espera", descartado: "Descartado", no_contactable: "No contactable",
 };
-const ESTADO_OPTIONS = ["pendiente", "contactado", "agendo", "descartado", "no_contactable"];
+const ESTADO_OPTIONS = ["pendiente", "contactado", "agendo", "en_espera", "descartado", "no_contactable"];
+
+// Cuánto esperar cuando el paciente dijo que él escribe. La conversación sale de
+// la lista activa y VUELVE SOLA pasada la fecha — lo calcula la vista al
+// consultar, no hay proceso que la despierte.
+const ESPERA_OPCIONES = [
+  { dias: 5,  label: "5 días" },
+  { dias: 15, label: "15 días" },
+  { dias: 30, label: "30 días" },
+];
 
 function normalize(str) {
   return (str || "")
@@ -130,6 +139,7 @@ const SELLO_VERBO = {
   pendiente: "Visto por",
   contactado: "Contactado por",
   agendo: "Agendado por",
+  en_espera: "Puesto en espera por",
   descartado: "Descartado por",
   no_contactable: "Marcado no contactable por",
 };
@@ -514,6 +524,9 @@ function FollowupRow({ group, onUpdateStatus, error }) {
               color: (ESTADO_SELLO[conv.estado] || ESTADO_SELLO.pendiente).fg,
             }}>
               {SELLO_VERBO[conv.estado] || `${ESTADO_LABEL[conv.estado] || conv.estado} por`} {conv.actualizado_por}
+              {conv.estado === "en_espera" && conv.esperar_hasta && (
+                <> · vuelve el {new Date(conv.esperar_hasta).toLocaleDateString("es-CR", { day: "numeric", month: "short" })}</>
+              )}
               {conv.estado_actualizado_en && ` · ${formatRelative(conv.estado_actualizado_en)}`}
             </p>
           )}
@@ -521,7 +534,28 @@ function FollowupRow({ group, onUpdateStatus, error }) {
 
         <select
           value={conv.estado}
-          onChange={(e) => onUpdateStatus(conv.id, { estado: e.target.value })}
+          onChange={(e) => {
+            const nuevo = e.target.value;
+            if (nuevo !== "en_espera") {
+              // Salir de "en espera" limpia la fecha: si no, quedaría una
+              // fecha vieja colgando que confunde al leer la fila.
+              onUpdateStatus(conv.id, { estado: nuevo, esperar_hasta: null });
+              return;
+            }
+            const dias = window.prompt(
+              "¿En cuántos días vuelve a aparecer?\n\nEscribí 5, 15 o 30. Mientras tanto sale de la lista de pendientes.",
+              "15"
+            );
+            if (dias === null) return;
+            const n = parseInt(dias, 10);
+            if (!Number.isFinite(n) || n < 1 || n > 365) {
+              window.alert("Poné un número de días entre 1 y 365.");
+              return;
+            }
+            const hasta = new Date();
+            hasta.setDate(hasta.getDate() + n);
+            onUpdateStatus(conv.id, { estado: "en_espera", esperar_hasta: hasta.toISOString() });
+          }}
           style={{ ...SELECT_STYLE, flexShrink: 0 }}
         >
           {ESTADO_OPTIONS.map((v) => <option key={v} value={v}>{ESTADO_LABEL[v]}</option>)}
