@@ -384,9 +384,18 @@ function LeadRow({ conv }) {
 
         <div style={{ flex: 1, minWidth: 0 }}>
           <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap", marginBottom: 4 }}>
+            {/* Igual que en Seguimiento: el nombre identifica, el procedimiento
+                describe. patient_name solo existe desde el 2026-09-08, así que
+                el procedimiento sigue de título cuando no hay nombre — que hoy
+                es la mayoría. */}
             <p style={{ margin: 0, fontSize: 15, fontWeight: 700, color: COLORS.green, fontFamily: "'Manrope', sans-serif" }}>
-              {formatProcedure(conv.procedure_interest) || "Procedimiento no especificado"}
+              {conv.patient_name || formatProcedure(conv.procedure_interest) || "Procedimiento no especificado"}
             </p>
+            {conv.patient_name && (
+              <span style={{ fontSize: 13, color: COLORS.textMuted, fontFamily: "'Manrope', sans-serif" }}>
+                {formatProcedure(conv.procedure_interest) || "Procedimiento no especificado"}
+              </span>
+            )}
             {sentimentInfo && (
               <Badge variant={sentimentInfo.fg === COLORS.danger ? "danger" : "default"} style={{ background: sentimentInfo.bg, color: sentimentInfo.fg }}>
                 {sentimentInfo.label}
@@ -510,7 +519,7 @@ export function LeadsCalientesSection() {
       const [{ data, error: dataError }, { count, error: countError }] = await Promise.all([
         applyServerFilters(
           supabase.from("sofia_conversations").select(
-            "id, phone_number, procedure_interest, sentiment, message_count, escalated, escalation_reason, created_at, updated_at, channel, prospect_id"
+            "id, phone_number, patient_name, procedure_interest, sentiment, message_count, escalated, escalation_reason, created_at, updated_at, channel, prospect_id"
           ),
           filters
         )
