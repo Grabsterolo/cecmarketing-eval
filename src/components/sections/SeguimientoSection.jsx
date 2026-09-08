@@ -28,7 +28,7 @@ const FETCH_PAGE_SIZE = 1000;
 // la vista (migración 20260902231711) — cuándo alguien del equipo tocó el
 // estado, NO cuándo se actualizó la conversación. Se usa para el "por X · hace
 // Nmin" de cada tarjeta.
-const QUEUE_COLUMNS = "id, phone_number, phone_hash, procedure_interest, procedure_code, escalation_reason, channel, message_count, sentiment, created_at, prospect_id, origen, categoria, score, estado, nota, actualizado_por, estado_actualizado_en";
+const QUEUE_COLUMNS = "id, phone_number, phone_hash, procedure_interest, procedure_code, escalation_reason, channel, message_count, sentiment, created_at, prospect_id, origen, categoria, score, estado, nota, actualizado_por, estado_actualizado_en, urgente";
 
 // "Escalada por otro motivo" son escalaciones clínicas reales (contraindicación,
 // lactancia, pérdida de peso en curso) que hasta el 2026-09-07 no llegaban acá:
@@ -203,6 +203,7 @@ function FilterBar({
   origen, setOrigen, categoria, setCategoria, estado, setEstado, canal, setCanal,
   procedimiento, setProcedimiento,
   search, setSearch,
+  soloUrgentes, setSoloUrgentes, cuantosUrgentes,
 }) {
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 12, marginBottom: 8 }}>
@@ -211,6 +212,35 @@ function FilterBar({
           Desde
           <input type="date" value={from} min={MIN_DATE} max={to} onChange={(e) => setFrom(clampToMinDate(e.target.value))} style={dateInputStyle} />
         </label>
+        {/* Ver lo que entró hoy exigía mover dos selectores de fecha. Los leads
+            del día son justo los que todavía se pueden recuperar. */}
+        <button
+          onClick={() => { setFrom(todayISO()); setTo(todayISO()); }}
+          style={{
+            padding: "6px 14px", borderRadius: 999, fontSize: 13, fontWeight: 600,
+            fontFamily: "'Manrope', sans-serif", cursor: "pointer",
+            border: `1.5px solid ${from === todayISO() && to === todayISO() ? COLORS.green : COLORS.border}`,
+            background: from === todayISO() && to === todayISO() ? COLORS.green : "transparent",
+            color: from === todayISO() && to === todayISO() ? "#fff" : COLORS.text,
+          }}
+        >
+          Hoy
+        </button>
+        {cuantosUrgentes > 0 && (
+          <button
+            onClick={() => setSoloUrgentes((v) => !v)}
+            title="Reclamos, complicaciones post-operatorias y pacientes buscando otra clínica"
+            style={{
+              padding: "6px 14px", borderRadius: 999, fontSize: 13, fontWeight: 700,
+              fontFamily: "'Manrope', sans-serif", cursor: "pointer",
+              border: `1.5px solid ${COLORS.danger}`,
+              background: soloUrgentes ? COLORS.danger : COLORS.dangerBg,
+              color: soloUrgentes ? "#fff" : COLORS.danger,
+            }}
+          >
+            ⚠ Urgentes ({cuantosUrgentes})
+          </button>
+        )}
         <label style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 13, color: COLORS.textMuted, fontFamily: "'Manrope', sans-serif" }}>
           Hasta
           <input type="date" value={to} min={from} max={todayISO()} onChange={(e) => setTo(e.target.value)} style={dateInputStyle} />
@@ -445,6 +475,15 @@ function FollowupRow({ group, onUpdateStatus, error }) {
             <p style={{ margin: 0, fontSize: 15, fontWeight: 700, color: COLORS.green, fontFamily: "'Manrope', sans-serif" }}>
               {title}
             </p>
+            {conv.urgente && (
+              <span style={{
+                padding: "2px 10px", borderRadius: 999, fontSize: 11, fontWeight: 800,
+                letterSpacing: 0.3, background: COLORS.danger, color: "#fff",
+                fontFamily: "'Manrope', sans-serif", whiteSpace: "nowrap",
+              }} title="Reclamo, complicación o paciente buscando otra clínica">
+                ⚠ URGENTE
+              </span>
+            )}
             <Badge variant={conv.categoria === "cirugia" ? "gold" : "default"}>
               {CATEGORIA_LABEL[conv.categoria] || conv.categoria}
             </Badge>
@@ -535,6 +574,7 @@ export function SeguimientoSection({ profile }) {
   const [canal, setCanal] = useState("todos");
   const [procedimiento, setProcedimiento] = useState("todos");
   const [search, setSearch] = useState("");
+  const [soloUrgentes, setSoloUrgentes] = useState(false);
   const [page, setPage] = useState(1);
 
   const [rawRows, setRawRows] = useState([]);
@@ -640,7 +680,7 @@ export function SeguimientoSection({ profile }) {
 
   // Cambiar cualquier filtro vuelve a la página 1 — si no, se puede quedar
   // viendo una página que ya no existe con el filtro nuevo.
-  useEffect(() => { setPage(1); }, [from, to, origen, categoria, estado, canal, procedimiento, search]);
+  useEffect(() => { setPage(1); }, [from, to, origen, categoria, estado, canal, procedimiento, search, soloUrgentes]);
 
   // Aplica a la lista en memoria un cambio hecho por OTRA persona (o por uno
   // mismo en otra pestaña) que llegó por realtime.
@@ -758,10 +798,17 @@ export function SeguimientoSection({ profile }) {
       if (estado !== "todos" && r.estado !== estado) return false;
       if (canal !== "todos" && r.channel !== canal) return false;
       if (!matchesProcedure(r.procedure_code, procedimiento)) return false;
-      if (q && !normalize(r.procedure_interest).includes(q)) return false;
+      // El buscador miraba SOLO procedure_interest, que es una etiqueta de 2-4
+      // palabras. Todo el contexto clínico que escribe Sofía vive en
+      // escalation_reason —"solicita hablar con director", "consultando con otro
+      // cirujano en Bogotá"— y era inbuscable. Buscar "director" no devolvía
+      // nada aunque la conversación tratara exactamente de eso.
+      if (q && !normalize(r.procedure_interest).includes(q)
+            && !normalize(r.escalation_reason).includes(q)) return false;
+      if (soloUrgentes && !r.urgente) return false;
       return true;
     });
-  }, [rawRows, origen, categoria, estado, canal, procedimiento, search]);
+  }, [rawRows, origen, categoria, estado, canal, procedimiento, search, soloUrgentes]);
 
   const grouped = useMemo(() => groupByPhone(filtered), [filtered]);
   const totalPages = Math.max(1, Math.ceil(grouped.length / PAGE_SIZE));
@@ -798,6 +845,8 @@ export function SeguimientoSection({ profile }) {
 
       <FilterBar
         from={from} to={to} setFrom={setFrom} setTo={setTo}
+        soloUrgentes={soloUrgentes} setSoloUrgentes={setSoloUrgentes}
+        cuantosUrgentes={rawRows.filter((r) => r.urgente && r.estado === "pendiente").length}
         origen={origen} setOrigen={setOrigen}
         categoria={categoria} setCategoria={setCategoria}
         estado={estado} setEstado={setEstado}
