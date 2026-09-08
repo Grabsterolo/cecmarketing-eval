@@ -177,6 +177,10 @@ export function ConfigureSofiaSection() {
   // donde lo seguro es asumir que está contestando.
   const [followupEnabled, setFollowupEnabled] = useState(false);
   const [togglingFollowup, setTogglingFollowup] = useState(false);
+  // Aviso de caída del seguimiento. El Worker registra 'followup_sin_enviar'
+  // cuando lleva 2h hábiles sin mandar nada teniendo cola. Se muestra acá, al
+  // lado del interruptor, porque es donde alguien va a mirar cuando sospeche.
+  const [alertaCaida, setAlertaCaida] = useState(null);
   const [togglingWhatsapp, setTogglingWhatsapp] = useState(false);
   const [loading, setLoading] = useState(true);
   const [savingField, setSavingField] = useState(null);
@@ -209,6 +213,23 @@ export function ConfigureSofiaSection() {
       setLoading(false);
     }
     load();
+
+    // El 2026-09-08 el seguimiento estuvo caído 2h30 y nadie se enteró: saltar
+    // un envío no deja rastro, así que un barrido que se salta a todos se ve
+    // igual que uno sin candidatos. Esto lo hace visible.
+    async function cargarAlerta() {
+      const desde = new Date(Date.now() - 6 * 3600 * 1000).toISOString();
+      const { data } = await supabase
+        .from("sofia_reliability_events")
+        .select("detail, created_at")
+        .eq("event_type", "followup_sin_enviar")
+        .gte("created_at", desde)
+        .order("created_at", { ascending: false })
+        .limit(1);
+      if (mounted && data?.length) setAlertaCaida(data[0]);
+    }
+    cargarAlerta();
+
     return () => { mounted = false; };
   }, []);
 
@@ -356,6 +377,23 @@ export function ConfigureSofiaSection() {
               }} />
             </button>
           </Card>
+
+          {alertaCaida && (
+            <Card style={{
+              padding: "14px 20px", background: COLORS.dangerBg,
+              border: `1.5px solid ${COLORS.danger}`,
+            }}>
+              <h4 style={{ margin: 0, fontWeight: 700, fontSize: 14, color: COLORS.danger }}>
+                El seguimiento no está enviando
+              </h4>
+              <p style={{ margin: "4px 0 0", fontSize: 13, color: COLORS.text, lineHeight: 1.5 }}>
+                {alertaCaida.detail}
+              </p>
+              <p style={{ margin: "6px 0 0", fontSize: 12, color: COLORS.textMuted }}>
+                Detectado {new Date(alertaCaida.created_at).toLocaleString("es-CR", { day: "numeric", month: "short", hour: "numeric", minute: "2-digit" })}
+              </p>
+            </Card>
+          )}
 
           {/* Interruptor aparte del de Sofía: "que conteste" y "que escriba
               primero" son dos decisiones distintas. Se puede querer a Sofía al
