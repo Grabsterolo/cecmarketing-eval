@@ -215,6 +215,7 @@ function FilterBar({
   search, setSearch,
   soloUrgentes, setSoloUrgentes, cuantosUrgentes,
 }) {
+  const hoyActivo = from === todayISO() && to === todayISO();
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 12, marginBottom: 8 }}>
       <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
@@ -223,15 +224,32 @@ function FilterBar({
           <input type="date" value={from} min={MIN_DATE} max={to} onChange={(e) => setFrom(clampToMinDate(e.target.value))} style={dateInputStyle} />
         </label>
         {/* Ver lo que entró hoy exigía mover dos selectores de fecha. Los leads
-            del día son justo los que todavía se pueden recuperar. */}
+            del día son justo los que todavía se pueden recuperar.
+
+            Es un INTERRUPTOR, no un atajo de ida. La primera versión solo hacía
+            setFrom/setTo a hoy: se pintaba de verde pero volver a tocarlo no
+            hacía nada, y para salir había que mover los dos selectores a mano —
+            exactamente lo que el botón venía a evitar. Al apagarlo vuelve al
+            rango por defecto (últimos 30 días), que es como arranca la
+            pantalla. */}
         <button
-          onClick={() => { setFrom(todayISO()); setTo(todayISO()); }}
+          onClick={() => {
+            if (hoyActivo) {
+              setFrom(clampToMinDate(daysAgoISO(30)));
+              setTo(todayISO());
+            } else {
+              setFrom(todayISO());
+              setTo(todayISO());
+            }
+          }}
+          aria-pressed={hoyActivo}
+          title={hoyActivo ? "Volver a los últimos 30 días" : "Ver solo lo que entró hoy"}
           style={{
             padding: "6px 14px", borderRadius: 999, fontSize: 13, fontWeight: 600,
             fontFamily: "'Manrope', sans-serif", cursor: "pointer",
-            border: `1.5px solid ${from === todayISO() && to === todayISO() ? COLORS.green : COLORS.border}`,
-            background: from === todayISO() && to === todayISO() ? COLORS.green : "transparent",
-            color: from === todayISO() && to === todayISO() ? "#fff" : COLORS.text,
+            border: `1.5px solid ${hoyActivo ? COLORS.green : COLORS.border}`,
+            background: hoyActivo ? COLORS.green : "transparent",
+            color: hoyActivo ? "#fff" : COLORS.text,
           }}
         >
           Hoy
