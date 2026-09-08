@@ -28,7 +28,7 @@ const FETCH_PAGE_SIZE = 1000;
 // la vista (migración 20260902231711) — cuándo alguien del equipo tocó el
 // estado, NO cuándo se actualizó la conversación. Se usa para el "por X · hace
 // Nmin" de cada tarjeta.
-const QUEUE_COLUMNS = "id, phone_number, phone_hash, procedure_interest, procedure_code, escalation_reason, channel, message_count, sentiment, created_at, prospect_id, origen, categoria, score, estado, nota, actualizado_por, estado_actualizado_en, urgente, esperar_hasta";
+const QUEUE_COLUMNS = "id, phone_number, phone_hash, procedure_interest, procedure_code, escalation_reason, channel, message_count, sentiment, created_at, prospect_id, origen, categoria, score, estado, nota, actualizado_por, estado_actualizado_en, urgente, esperar_hasta, patient_name";
 
 // "Escalada por otro motivo" son escalaciones clínicas reales (contraindicación,
 // lactancia, pérdida de peso en curso) que hasta el 2026-09-07 no llegaban acá:
@@ -491,7 +491,17 @@ function FollowupRow({ group, onUpdateStatus, error }) {
   const [notaOpen, setNotaOpen] = useState(false);
   const conv = group.latest;
   const sentimentInfo = SENTIMENT_ICON[normalize(conv.sentiment)];
-  const title = formatProcedure(conv.procedure_interest) || conv.escalation_reason || "Sin detalle";
+  // El nombre manda, el procedimiento pasa a subtítulo. Un asesor llama a
+  // personas, no a procedimientos: "Jeannette Salazar" es accionable de un
+  // vistazo, "Abdominoplastia" obliga a abrir la conversación para saber a quién
+  // se está por llamar.
+  //
+  // patient_name solo existe desde el 2026-09-08 (lo llena el Worker desde
+  // Zenvia). El histórico sigue en null, así que el procedimiento tiene que
+  // seguir sirviendo de título cuando no hay nombre — que hoy es la mayoría.
+  const procedimiento = formatProcedure(conv.procedure_interest) || conv.escalation_reason || "Sin detalle";
+  const title = conv.patient_name || procedimiento;
+  const subtitulo = conv.patient_name ? procedimiento : null;
 
   return (
     <Card style={{ marginBottom: 12, padding: 16 }}>
@@ -503,6 +513,11 @@ function FollowupRow({ group, onUpdateStatus, error }) {
             <p style={{ margin: 0, fontSize: 15, fontWeight: 700, color: COLORS.green, fontFamily: "'Manrope', sans-serif" }}>
               {title}
             </p>
+            {subtitulo && (
+              <span style={{ fontSize: 13, color: COLORS.textMuted, fontFamily: "'Manrope', sans-serif" }}>
+                {subtitulo}
+              </span>
+            )}
             {conv.urgente && (
               <span style={{
                 padding: "2px 10px", borderRadius: 999, fontSize: 11, fontWeight: 800,
@@ -856,7 +871,8 @@ export function SeguimientoSection({ profile }) {
       // cirujano en Bogotá"— y era inbuscable. Buscar "director" no devolvía
       // nada aunque la conversación tratara exactamente de eso.
       if (q && !normalize(r.procedure_interest).includes(q)
-            && !normalize(r.escalation_reason).includes(q)) return false;
+            && !normalize(r.escalation_reason).includes(q)
+            && !normalize(r.patient_name).includes(q)) return false;
       if (soloUrgentes && !r.urgente) return false;
       return true;
     });
