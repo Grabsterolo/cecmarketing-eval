@@ -54,6 +54,60 @@ function leadsOf(campaign) {
   return parseInt(campaign.actions?.find((a) => a.action_type === "lead")?.value || 0, 10);
 }
 
+// Ritmo de la cola de seguimiento: cuánto entra y cuánto alcanza a trabajarse.
+//
+// Es la versión útil de un aviso que estuvo un día en Seguimiento y decía
+// "1.088 conversaciones van a salir del rango". Ese número era la métrica
+// equivocada en la pantalla equivocada: un asesor no puede actuar sobre 1.088,
+// y además mezclaba la deuda vieja con el ritmo actual. Medido el 2026-09-09,
+// el equipo pasó de trabajar el 0-1% de lo que entraba a más del 60% en dos
+// semanas — un número que junta las dos épocas hace parecer que se pierde
+// terreno cuando se está ganando.
+function ColaDeSeguimiento({ datos }) {
+  if (!datos) return null;
+
+  const pct = (s) => (s.entraron > 0 ? Math.round((s.trabajadas / s.entraron) * 100) : null);
+  const estaSemana = pct(datos.estaSemana);
+  const semanaPasada = pct(datos.semanaPasada);
+
+  const fila = (titulo, s, porcentaje, destacar) => (
+    <div style={{ flex: "1 1 160px" }}>
+      <p style={{ margin: "0 0 4px", fontSize: 11, fontWeight: 700, letterSpacing: "0.06em", textTransform: "uppercase", color: COLORS.textMuted, fontFamily: "'Manrope', sans-serif" }}>
+        {titulo}
+      </p>
+      <p style={{ margin: 0, fontSize: destacar ? 30 : 24, fontWeight: 700, lineHeight: 1.1, color: destacar ? COLORS.green : COLORS.textMuted, fontFamily: "'Manrope', sans-serif", fontVariantNumeric: "tabular-nums" }}>
+        {porcentaje === null ? "—" : `${porcentaje}%`}
+      </p>
+      <p style={{ margin: "2px 0 0", fontSize: 12.5, color: COLORS.textMuted, fontFamily: "'Manrope', sans-serif" }}>
+        {s.trabajadas} de {s.entraron} trabajadas
+      </p>
+    </div>
+  );
+
+  return (
+    <Card>
+      <h3 style={{ margin: "0 0 4px", fontSize: 18, fontFamily: "'Cormorant Garamond', serif", fontWeight: 600, color: COLORS.green }}>
+        Cola de seguimiento
+      </h3>
+      <p style={{ margin: "0 0 16px", fontSize: 13, color: COLORS.textMuted, fontFamily: "'Manrope', sans-serif" }}>
+        Qué proporción de lo que entra alcanza a trabajarse. Es la cifra que dice si el equipo le gana al volumen.
+      </p>
+
+      <div style={{ display: "flex", gap: 24, flexWrap: "wrap", marginBottom: 14 }}>
+        {fila("Esta semana", datos.estaSemana, estaSemana, true)}
+        {fila("Semana pasada", datos.semanaPasada, semanaPasada, false)}
+      </div>
+
+      <p style={{ margin: 0, paddingTop: 14, borderTop: `1px solid ${COLORS.border}`, fontSize: 12.5, lineHeight: 1.55, color: COLORS.textMuted, fontFamily: "'Manrope', sans-serif" }}>
+        Quedan <strong style={{ color: COLORS.text }}>{datos.atrasadas.toLocaleString("es-CR")}</strong> conversaciones
+        sin resolver de semanas anteriores. Se cuentan aparte porque son de antes de que el equipo
+        empezara a trabajar la cola: mezclarlas con el ritmo de arriba haría parecer que se pierde
+        terreno cuando no es así.
+      </p>
+    </Card>
+  );
+}
+
 export function DashboardHome({ profile }) {
   const isMobile = useIsMobile();
 
@@ -63,6 +117,7 @@ export function DashboardHome({ profile }) {
   const [sofiaError, setSofiaError] = useState(null);
   const [loading, setLoading] = useState(true);
   const [updatedAt, setUpdatedAt] = useState(null);
+  const [cola, setCola] = useState(null);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -88,7 +143,22 @@ export function DashboardHome({ profile }) {
         return data;
       });
 
-    const [metaRes, sofiaRes] = await Promise.allSettled([metaPromise, sofiaPromise]);
+    // Ritmo de la cola de seguimiento. Va en Inicio y no en Seguimiento a
+    // propósito: es una cifra de gestión —¿el equipo le gana al volumen que
+    // entra?— y un asesor no puede hacer nada con ella. En su pantalla solo
+    // sería ruido.
+    const colaPromise = supabase
+      .rpc("sofia_cola_semanal")
+      .then(({ data, error }) => {
+        if (error) return Promise.reject(new Error(error.message));
+        return data;
+      });
+
+    const [metaRes, sofiaRes, colaRes] = await Promise.allSettled([metaPromise, sofiaPromise, colaPromise]);
+
+    // Si falla, la tarjeta no se pinta. Nunca un cero falso: en esta cifra un
+    // cero se leería como "no entró nada", que es lo contrario del problema.
+    setCola(colaRes.status === "fulfilled" ? colaRes.value : null);
 
     if (metaRes.status === "fulfilled") setMeta(metaRes.value);
     else setMetaError(metaRes.reason?.message || "No se pudo consultar Meta Ads");
@@ -226,6 +296,8 @@ export function DashboardHome({ profile }) {
           Sofía sí es real.
         </p>
       )}
+
+      <ColaDeSeguimiento datos={cola} />
 
       {/* Campañas vs conversaciones — el cruce temático */}
       <Card>

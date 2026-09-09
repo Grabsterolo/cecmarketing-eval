@@ -359,50 +359,6 @@ async function fetchUrgentesAbiertos() {
     .limit(URGENTES_TOPE);
 }
 
-// Cuántas conversaciones se están perdiendo por el borde del rango.
-//
-// La pantalla abre en los últimos 30 días, así que todo lo más viejo deja de
-// aparecer. Eso limpia la cola sola —bien— pero también hace que cada mes se
-// abandonen en silencio las que nadie alcanzó a trabajar: no las decide nadie,
-// simplemente dejan de verse.
-//
-// "Sin trabajar" es simplemente estado pendiente: nadie las resolvió. Se probó
-// afinarlo a "y además sin actualizado_por" —nadie las tocó ni para dejar una
-// nota— pero daba 926 contra las 1.088 que muestra el enlace de al lado, y un
-// número que no cuadra con lo que se ve al pulsarlo es exactamente la clase de
-// incoherencia que esta pantalla venía arrastrando.
-//
-// Se cuentan aparte del rango elegido, porque el punto es lo que queda fuera.
-const DIAS_VENTANA = 30;
-const DIAS_AVISO = 7;
-
-async function fetchAbandono() {
-  const base = () => supabase
-    .from("sofia_followup_queue")
-    .select("id", { count: "exact", head: true })
-    .eq("estado", "pendiente");
-
-  // Los MISMOS límites que pone el enlace "Ver las que están por salir": días
-  // completos en hora de Costa Rica, no horas exactas. Con horas exactas el
-  // aviso decía 927 y el enlace mostraba 1.086 — la diferencia era el día que
-  // cada uno cortaba por la mitad. Al derivar los dos de daysAgoISO() ya no se
-  // pueden separar.
-  const corte = `${daysAgoISO(DIAS_VENTANA)}T00:00:00-06:00`;
-  const finAviso = `${daysAgoISO(DIAS_VENTANA - DIAS_AVISO)}T23:59:59-06:00`;
-
-  const [salieron, porSalir] = await Promise.all([
-    base().lt("created_at", corte),
-    base().gte("created_at", corte).lte("created_at", finAviso),
-  ]);
-
-  // count == null también significa fallo: PostgREST puede responder 204 con
-  // error nulo. Ante la duda no se muestra nada, en vez de un cero falso.
-  if (salieron.error || porSalir.error || salieron.count == null || porSalir.count == null) {
-    return null;
-  }
-  return { salieron: salieron.count, porSalir: porSalir.count };
-}
-
 // Agrupa por phone_hash: una misma persona con varias conversaciones en el
 // conjunto ya filtrado se colapsa en una sola fila (la más reciente),
 // mostrando el score más alto del grupo. Conversaciones sin phone_hash no se
@@ -1191,50 +1147,6 @@ function CabeceraMiLista({
   );
 }
 
-// Hace visible lo que hoy se pierde sin que nadie lo decida. No es un adorno
-// ni un reproche: es el mismo principio que la franja de urgentes — una fuga
-// que nadie ve no se puede arreglar.
-function AvisoAbandono({ datos, onVerLasQueSalen }) {
-  if (!datos || (datos.porSalir === 0 && datos.salieron === 0)) return null;
-
-  return (
-    <div style={{
-      display: "flex", alignItems: "baseline", gap: 10, flexWrap: "wrap",
-      margin: "0 0 20px", padding: "12px 14px", borderRadius: 8,
-      background: COLORS.warningBg, border: `1px solid ${COLORS.warningBorder}`,
-      fontFamily: "'Manrope', sans-serif", fontSize: 12.5, lineHeight: 1.55,
-      color: COLORS.warning,
-    }}>
-      <span>
-        {datos.porSalir > 0 && (
-          <>
-            <strong>{datos.porSalir.toLocaleString("es-CR")} conversaciones sin trabajar</strong>{" "}
-            cumplen {DIAS_VENTANA} días esta semana y dejarán de aparecer en el rango por defecto.
-          </>
-        )}
-        {datos.porSalir > 0 && datos.salieron > 0 && " "}
-        {datos.salieron > 0 && (
-          <>Otras {datos.salieron.toLocaleString("es-CR")} ya salieron sin resolverse.</>
-        )}
-      </span>
-
-      {datos.porSalir > 0 && (
-        <button
-          onClick={onVerLasQueSalen}
-          style={{
-            background: "none", border: "none", padding: 0,
-            fontSize: 12.5, fontWeight: 700, color: COLORS.warning,
-            fontFamily: "'Manrope', sans-serif", cursor: "pointer",
-            textDecoration: "underline", whiteSpace: "nowrap",
-          }}
-        >
-          Ver las que están por salir
-        </button>
-      )}
-    </div>
-  );
-}
-
 // Franja fija de urgentes. Va arriba de todo y no responde a ningún filtro ni
 // al rango de fechas: son reclamos, complicaciones post-operatorias y pacientes
 // que están buscando otra clínica. El score los enterraba porque mide valor
@@ -1316,7 +1228,6 @@ export function SeguimientoSection({ profile }) {
   // Los urgentes viven aparte de rawRows porque no comparten alcance: la lista
   // respeta el rango de fechas y los filtros, la franja no.
   const [urgentes, setUrgentes] = useState([]);
-  const [abandono, setAbandono] = useState(null);
 
   const [rawRows, setRawRows] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -1430,12 +1341,6 @@ export function SeguimientoSection({ profile }) {
       // Un fallo acá no bloquea la pantalla: la lista de abajo sigue sirviendo,
       // y los urgentes igual salen primeros dentro de ella.
       if (!urgErr) setUrgentes(data || []);
-    })();
-    // Lo mismo para el aviso de abandono: se cuenta fuera del rango elegido,
-    // porque el punto es justamente lo que queda fuera de él.
-    (async () => {
-      const datos = await fetchAbandono();
-      if (!cancelled) setAbandono(datos);
     })();
     return () => { cancelled = true; };
   }, [reloadKey]);
@@ -1690,20 +1595,6 @@ export function SeguimientoSection({ profile }) {
         tomando={tomando} tomados={tomados}
         onTomar={tomarMiLista} onSoltar={soltarMiLista}
         error={errorLista}
-      />
-
-      <AvisoAbandono
-        datos={abandono}
-        onVerLasQueSalen={() => {
-          // Deja la pantalla exactamente en las que están por salir: la semana
-          // que cruza el borde, toda la cola, estado pendiente. Los mismos tres
-          // criterios que cuenta el aviso, para que el número y la lista digan
-          // lo mismo.
-          setModo("todas");
-          setEstado("pendiente");
-          setFrom(clampToMinDate(daysAgoISO(DIAS_VENTANA)));
-          setTo(daysAgoISO(DIAS_VENTANA - DIAS_AVISO));
-        }}
       />
 
       <BandaUrgentes
