@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo } from "react";
 import {
-  ComposedChart, Bar, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer,
+  ComposedChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer,
 } from "recharts";
 import { MessageCircle } from "lucide-react";
 import { COLORS, SOURCE_COLORS } from "../../constants/colors.js";
@@ -135,6 +135,33 @@ function formatDay(dayStr) {
   return new Date(`${dayStr}T00:00:00`).toLocaleDateString("es-CR", { day: "numeric", month: "short" });
 }
 
+// El recuadro del gráfico de volumen. Se escribe a mano porque el porcentaje
+// ya no es una serie dibujada —son dos barras de conteo— pero sigue siendo el
+// dato que resume el día, y perderlo al sacar la línea habría sido cambiar un
+// problema por otro.
+function TooltipVolumen({ active, payload, label }) {
+  if (!active || !payload || payload.length === 0) return null;
+  const d = payload[0].payload;
+  const fila = (color, texto) => (
+    <p style={{ margin: "2px 0 0", fontSize: 12, color, fontFamily: "'Manrope', sans-serif" }}>
+      {texto}
+    </p>
+  );
+  return (
+    <div style={{
+      background: COLORS.panel, border: `1px solid ${COLORS.border}`,
+      borderRadius: 8, padding: "8px 12px",
+    }}>
+      <p style={{ margin: 0, fontSize: 12, fontWeight: 700, color: COLORS.text, fontFamily: "'Manrope', sans-serif" }}>
+        {label}
+      </p>
+      {fila(SOURCE_COLORS.sofia, `${d.Conversaciones} conversaciones`)}
+      {fila(COLORS.green, `${d.Escaladas} llegaron a un asesor`)}
+      {fila(COLORS.textMuted, `${d["% Escalado"]}% escalado`)}
+    </div>
+  );
+}
+
 function buildDailySeries(conversations, from, to) {
   // Las claves de los baldes se generan sumando días a la fecha calendario,
   // NO con toISOString(): esa devuelve la fecha UTC de una medianoche local,
@@ -163,6 +190,11 @@ function buildDailySeries(conversations, from, to) {
 
   return [...byDay.values()].map((b) => ({
     ...b,
+    // El conteo absoluto ya se venía calculando pero no se dibujaba: el
+    // gráfico mostraba solo el porcentaje, y saber cuántas se escalaron
+    // obligaba a hacer la cuenta mental (25% de 240) mirando dos ejes
+    // distintos.
+    Escaladas: b.escaladas,
     "% Escalado": b.Conversaciones > 0 ? Math.round((b.escaladas / b.Conversaciones) * 100) : 0,
   }));
 }
@@ -605,34 +637,27 @@ export function SofiaMetricsSection({ setActive }) {
           </Card>
 
           <Card>
-            <h3 style={{ margin: "0 0 16px", fontSize: 18, fontFamily: "'Cormorant Garamond', serif", fontWeight: 600, color: COLORS.green }}>
-              Volumen diario y % escalado
+            <h3 style={{ margin: "0 0 4px", fontSize: 18, fontFamily: "'Cormorant Garamond', serif", fontWeight: 600, color: COLORS.green }}>
+              Volumen diario y escalaciones
             </h3>
+            <p style={{ margin: "0 0 16px", fontSize: 13, color: COLORS.textMuted, fontFamily: "'Manrope', sans-serif" }}>
+              Cuántas conversaciones hubo cada día y cuántas llegaron a un asesor. El porcentaje aparece al pasar el cursor.
+            </p>
+            {/* Antes esto era una barra de volumen más una línea de porcentaje
+                en un segundo eje. Saber cuántas se escalaron obligaba a hacer
+                la cuenta mental —25% de 240— cruzando dos escalas distintas.
+                Dos barras en el MISMO eje responden la pregunta sin cuentas, y
+                la proporción se sigue viendo de un vistazo por la altura
+                relativa. El porcentaje no se pierde: pasa al recuadro. */}
             <ResponsiveContainer width="100%" height={260}>
-              <ComposedChart data={dailySeries} barGap={4} barCategoryGap="30%">
+              <ComposedChart data={dailySeries} barGap={4} barCategoryGap="24%">
                 <CartesianGrid strokeDasharray="3 3" stroke={COLORS.border} vertical={false} />
                 <XAxis dataKey="name" tick={tableStyles.tick} axisLine={false} tickLine={false} />
-                <YAxis yAxisId="left" orientation="left" tick={tableStyles.tick} axisLine={false} tickLine={false} width={36} allowDecimals={false} />
-                <YAxis yAxisId="right" orientation="right" tick={tableStyles.tick} axisLine={false} tickLine={false} width={36} unit="%" />
-                <Tooltip
-                  contentStyle={{
-                    fontFamily: "'Manrope', sans-serif", fontSize: 12,
-                    borderRadius: 8, border: `1px solid ${COLORS.border}`,
-                    background: COLORS.panel,
-                  }}
-                  cursor={{ fill: COLORS.panelAlt }}
-                />
+                <YAxis tick={tableStyles.tick} axisLine={false} tickLine={false} width={36} allowDecimals={false} />
+                <Tooltip content={<TooltipVolumen />} cursor={{ fill: COLORS.panelAlt }} />
                 <Legend wrapperStyle={{ fontFamily: "'Manrope', sans-serif", fontSize: 12, paddingTop: 8 }} />
-                <Bar yAxisId="left" dataKey="Conversaciones" fill={SOURCE_COLORS.sofia} radius={[4, 4, 0, 0]} />
-                <Line
-                  yAxisId="right"
-                  type="monotone"
-                  dataKey="% Escalado"
-                  stroke={COLORS.green}
-                  strokeWidth={2}
-                  dot={{ r: 3, fill: COLORS.green }}
-                  activeDot={{ r: 5 }}
-                />
+                <Bar dataKey="Conversaciones" fill={SOURCE_COLORS.sofia} radius={[4, 4, 0, 0]} />
+                <Bar dataKey="Escaladas" fill={COLORS.green} radius={[4, 4, 0, 0]} />
               </ComposedChart>
             </ResponsiveContainer>
           </Card>
