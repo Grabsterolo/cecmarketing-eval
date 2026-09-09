@@ -62,17 +62,17 @@ const ESTADO_OPTIONS = ["pendiente", "contactado", "agendo", "en_espera", "desca
 // que describe el desenlace más común— no se entiende por su nombre.
 const ESTADO_AYUDA = {
   pendiente:
-    "Nadie lo ha trabajado todavía. Es donde entra toda conversación que Sofía dejó abierta.",
+    "Sin trabajar. Es el estado inicial de toda conversación que Sofía deja abierta.",
   contactado:
-    "Ya se le llamó o escribió y la conversación sigue viva, pero todavía no hay cita.",
+    "Ya hubo contacto con el paciente y la conversación sigue abierta, pero todavía sin cita.",
   agendo:
-    "Consiguió la cita. Sale de la cola y cuenta como resultado del módulo.",
+    "La valoración quedó agendada. La conversación sale de la cola y se registra como resultado.",
   en_espera:
-    "La pelota está del lado del paciente: dijo que él escribe, o no contestó. Sale de pendientes y vuelve solo en la fecha que elija. Al volver, el siguiente paso es una llamada, no un mensaje.",
+    "El paciente quedó de responder, o no respondió. La conversación sale de pendientes y regresa automáticamente en la fecha que elija. Al regresar corresponde llamar, no escribir.",
   descartado:
-    "No hay interés real o no califica. Se pierde de la cola, así que úselo solo cuando esté seguro.",
+    "Sin interés real o no califica. Sale de la cola de forma definitiva: úselo solo con certeza.",
   no_contactable:
-    "El número no sirve o pidió que no lo contacten más. Distinto de descartado: acá el problema es el canal, no el interés.",
+    "El número es inválido o el paciente pidió no ser contactado. A diferencia de descartado, el impedimento es el canal y no el interés.",
 };
 
 // Cuánto esperar cuando el paciente dijo que él escribe. La conversación sale de
@@ -439,7 +439,7 @@ function ContadoresEstado({ estado, setEstado, conteos, total }) {
       <button
         onClick={() => setEstado("todos")}
         aria-pressed={estado === "todos"}
-        title="Todas las conversaciones, sin importar en qué estado estén."
+        title="Todas las conversaciones, en cualquier estado."
         style={chip(estado === "todos", true)}
       >
         Todos
@@ -828,7 +828,7 @@ function FollowupRow({ group, onUpdateStatus, error, miId }) {
                 padding: "2px 10px", borderRadius: 999, fontSize: 11, fontWeight: 800,
                 letterSpacing: 0.3, background: COLORS.danger, color: "#fff",
                 fontFamily: "'Manrope', sans-serif", whiteSpace: "nowrap",
-              }} title="Reclamo, complicación o paciente buscando otra clínica">
+              }} title="Reclamo, complicación o paciente que consulta en otra clínica">
                 <AlertTriangle size={11} strokeWidth={2.5} /> URGENTE
               </span>
             )}
@@ -975,7 +975,7 @@ function FollowupRow({ group, onUpdateStatus, error, miId }) {
             Cancelar
           </button>
           <span style={{ fontSize: 12, color: COLORS.textMuted, fontFamily: "'Manrope', sans-serif", width: "100%" }}>
-            Sale de pendientes y vuelve sola en esa fecha. Al retomarla, el siguiente paso es una llamada.
+            Sale de pendientes y regresa automáticamente en esa fecha. Al regresar corresponde llamar, no escribir.
           </span>
         </div>
       )}
@@ -1092,7 +1092,7 @@ function CabeceraMiLista({
               cursor: tomando ? "not-allowed" : "pointer", textDecoration: "underline",
             }}
           >
-            Soltar los que no trabajé
+            Liberar los que no trabajé
           </button>
         )}
       </div>
@@ -1101,7 +1101,7 @@ function CabeceraMiLista({
         {enMiLista
           ? mios === 0
             ? `Su lista está vacía. Tome ${LISTA_DEL_DIA} leads del principio de la cola para empezar el día.`
-            : `${mios} ${mios === 1 ? "lead pendiente" : "leads pendientes"} a su nombre. Los que no trabaje vuelven a la cola en 3 días.`
+            : `${mios} ${mios === 1 ? "lead pendiente" : "leads pendientes"} a su nombre. Los que no trabaje regresan a la cola en 3 días.`
           : `${total.toLocaleString("es-CR")} conversaciones en la cola completa, de todos los asesores.`}
       </p>
 
@@ -1143,7 +1143,7 @@ function BandaUrgentes({ filas, onUpdateStatus, rowErrors, miId }) {
           {filas.length === 1 ? "1 caso urgente sin atender" : `${filas.length} casos urgentes sin atender`}
         </h3>
         <span style={{ fontSize: 12.5, color: COLORS.danger, fontFamily: "'Manrope', sans-serif", opacity: 0.85 }}>
-          Reclamos, complicaciones y pacientes buscando otra clínica. Van primero, sin importar el puntaje.
+          Reclamos, complicaciones y pacientes que consultan en otra clínica. Tienen prioridad sobre el puntaje.
         </span>
       </header>
 
@@ -1516,7 +1516,7 @@ export function SeguimientoSection({ profile }) {
     <div>
       <SectionHeader
         icon={<PhoneCall size={20} color={COLORS.gold} />}
-        subtitle="Conversaciones de Sofía que quedaron abiertas sin venta — escaladas sin cita y cerradas sin escalar, priorizadas por score."
+        subtitle="Conversaciones de Sofía que quedaron abiertas sin venta — escaladas sin cita y cerradas sin escalar, priorizadas por puntaje."
       />
 
       {/* Antes que los indicadores y que cualquier filtro: es lo primero que
