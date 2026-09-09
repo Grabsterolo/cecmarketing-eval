@@ -12,7 +12,7 @@ import { SofiaAuditSection } from "./sections/SofiaAuditSection.jsx";
 import { ConfigureSofiaSection } from "./sections/ConfigureSofiaSection.jsx";
 import { TestSofiaSection } from "./sections/TestSofiaSection.jsx";
 import { BirthdaySection } from "./sections/BirthdaySection.jsx";
-import { PacientesSection } from "./sections/PacientesSection.jsx";
+import { ContactosSection } from "./sections/ContactosSection.jsx";
 import { SeguimientoSection } from "./sections/SeguimientoSection.jsx";
 import { ConfiguracionSection } from "./sections/ConfiguracionSection.jsx";
 
@@ -26,7 +26,7 @@ const SECTION_TITLES = {
   "probar-sofia": "Probar a Sofía",
   cumpleanos: "Cumpleaños",
   seguimiento: "Seguimiento",
-  pacientes: "Pacientes",
+  contactos: "Contactos",
   configuracion: "Configuración",
 };
 
@@ -84,7 +84,7 @@ export function Dashboard({ onLogout, profile }) {
       case "probar-sofia": return <TestSofiaSection />;
       case "cumpleanos": return <BirthdaySection />;
       case "seguimiento": return <SeguimientoSection profile={profile} />;
-      case "pacientes": return <PacientesSection />;
+      case "contactos": return <ContactosSection />;
       case "configuracion": return profile?.role === "admin" ? <ConfiguracionSection profile={profile} /> : null;
       default: return null;
     }

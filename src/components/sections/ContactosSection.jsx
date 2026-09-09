@@ -14,6 +14,11 @@ import { supabase } from "../../lib/supabase.js";
 
 const PAGE_SIZE = 25;
 
+// La sección se llama Contactos, pero la vista de la base sigue siendo
+// sofia_pacientes. Es un nombre interno que nadie ve, y renombrarla obligaría
+// a coordinar migración y despliegue al minuto para que el listado no se caiga
+// en el medio — riesgo sin ninguna ganancia para quien usa el sistema.
+
 // Códigos que no son un procedimiento — se agrupan bajo "sin interés
 // definido" en vez de mostrarse como si fueran una categoría de tratamiento.
 const NO_ES_PROCEDIMIENTO = new Set([
@@ -80,7 +85,7 @@ function ZenviaLink({ prospectId }) {
   );
 }
 
-export function PacientesSection() {
+export function ContactosSection() {
   const isMobile = useIsMobile();
 
   const [filas, setFilas] = useState([]);
@@ -166,12 +171,12 @@ export function PacientesSection() {
     <div>
       <SectionHeader
         icon={<Users size={20} color={COLORS.gold} />}
-        subtitle="Personas que han conversado con Sofía, con su número y el procedimiento que consultaron."
+        subtitle="Personas que han conversado con Sofía, con su número y el procedimiento que consultaron. La mayoría todavía no es paciente del CEC."
       />
 
       <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "repeat(3,1fr)", gap: 16, marginBottom: 20 }}>
         <Card>
-          <MetricKpi label="Pacientes" value={kpis ? `${kpis.total}` : "..."} sub="Personas distintas" />
+          <MetricKpi label="Contactos" value={kpis ? `${kpis.total}` : "..."} sub="Personas distintas" />
         </Card>
         <Card>
           <MetricKpi
@@ -216,14 +221,14 @@ export function PacientesSection() {
           <option value="sin">Sin teléfono</option>
         </select>
         <span style={{ fontSize: 12.5, color: COLORS.textMuted, fontFamily: "'Manrope', sans-serif" }}>
-          {cargando ? "Cargando..." : `${total.toLocaleString("es-CR")} ${total === 1 ? "paciente" : "pacientes"}`}
+          {cargando ? "Cargando..." : `${total.toLocaleString("es-CR")} ${total === 1 ? "contacto" : "contactos"}`}
         </span>
       </div>
 
       {error && <ErrorBanner>{error}</ErrorBanner>}
 
       {!cargando && !error && filas.length === 0 && (
-        <EmptyState title="Sin pacientes para estos filtros" description="Pruebe con otro procedimiento o borre la búsqueda." />
+        <EmptyState title="Sin contactos para estos filtros" description="Pruebe con otro procedimiento o borre la búsqueda." />
       )}
 
       {filas.length > 0 && (
@@ -232,7 +237,7 @@ export function PacientesSection() {
             <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13, fontFamily: "'Manrope', sans-serif" }}>
               <thead>
                 <tr>
-                  {["Paciente", "Teléfono", "Interés", "Mensajes", "Última actividad", "Primer contacto", ""].map((h, i) => (
+                  {["Nombre", "Teléfono", "Interés", "Mensajes", "Última actividad", "Primer contacto", ""].map((h, i) => (
                     <th key={h || i} style={{
                       textAlign: i === 3 ? "right" : "left",
                       padding: "14px 16px",
