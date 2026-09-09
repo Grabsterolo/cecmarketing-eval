@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { PhoneCall, ExternalLink, ChevronDown, ChevronLeft, ChevronRight, Smile, Minus, Frown, Radio, RadioTower } from "lucide-react";
+import { PhoneCall, ExternalLink, ChevronDown, ChevronLeft, ChevronRight, Smile, Minus, Frown, Radio, RadioTower, AlertTriangle } from "lucide-react";
 import { COLORS } from "../../constants/colors.js";
 import { PROCEDURE_OPTIONS, matchesProcedure, formatProcedure } from "../../constants/procedures.js";
 import { Card } from "../ui/Card.jsx";
@@ -167,6 +167,14 @@ async function fetchAllInRange(from, to) {
       .select(QUEUE_COLUMNS)
       .gte("created_at", `${from}T00:00:00-06:00`)
       .lte("created_at", `${to}T23:59:59-06:00`)
+      // urgente PRIMERO, igual que el ORDER BY de la vista. Antes esto pedía
+      // solo score: un .order() explícito reemplaza el orden interno de la
+      // vista, así que la prioridad de urgencia que la vista calcula se perdía
+      // en el camino. El efecto medido el 2026-09-08: los 12 casos urgentes
+      // abiertos quedaban repartidos entre las páginas 18 y 117 de 118 — una
+      // paciente con sangrado y dolor post-procedimiento estaba en la 98.
+      // El score ordena oportunidades de venta; no puede ordenar riesgos.
+      .order("urgente", { ascending: false })
       .order("score", { ascending: false })
       .order("created_at", { ascending: false })
       .range(offset, offset + FETCH_PAGE_SIZE - 1);
@@ -176,6 +184,29 @@ async function fetchAllInRange(from, to) {
     offset += FETCH_PAGE_SIZE;
   }
   return { data: rows, error: null };
+}
+
+// Los urgentes abiertos, aparte del resto y SIN el rango de fechas de la
+// pantalla. Van en una franja fija arriba: un reclamo o una complicación
+// post-operatoria no puede depender de que el rango elegido lo alcance, ni de
+// que alguien se acuerde de tocar un filtro. Se trae desde MIN_DATE, que es
+// donde empieza a existir la cola.
+//
+// El tope de 50 es una red, no un límite esperado: la vista marca como urgente
+// ~0,5% de la cola (21 de 4.219 al escribir esto). Si algún día la franja
+// llega al tope, el problema es el criterio de urgencia, no la franja — y por
+// eso se avisa en pantalla en vez de recortar en silencio.
+const URGENTES_TOPE = 50;
+
+async function fetchUrgentesAbiertos() {
+  return supabase
+    .from("sofia_followup_queue")
+    .select(QUEUE_COLUMNS)
+    .eq("urgente", true)
+    .eq("estado", "pendiente")
+    .gte("created_at", `${MIN_DATE}T00:00:00-06:00`)
+    .order("created_at", { ascending: false })
+    .limit(URGENTES_TOPE);
 }
 
 // Agrupa por phone_hash: una misma persona con varias conversaciones en el
@@ -188,18 +219,53 @@ function groupByPhone(rows) {
     const key = row.phone_hash || `id:${row.id}`;
     const existing = groups.get(key);
     if (!existing) {
-      groups.set(key, { key, latest: row, count: 1, maxScore: row.score });
+      groups.set(key, { key, latest: row, count: 1, maxScore: row.score, urgente: !!row.urgente });
       return;
     }
     existing.count += 1;
     existing.maxScore = Math.max(existing.maxScore, row.score);
+    // Si CUALQUIERA de las conversaciones de esta persona es urgente, el grupo
+    // entero lo es: la fila que se muestra es la más reciente, y esconder la
+    // urgencia porque el último mensaje no la tenía sería el mismo error que
+    // esta corrección viene a arreglar.
+    existing.urgente = existing.urgente || !!row.urgente;
     if (new Date(row.created_at) > new Date(existing.latest.created_at)) {
       existing.latest = row;
     }
   });
   const list = [...groups.values()];
-  list.sort((a, b) => b.maxScore - a.maxScore || new Date(b.latest.created_at) - new Date(a.latest.created_at));
+  // Urgente primero, después score — el mismo criterio que la vista y que
+  // fetchAllInRange. Ordenar solo por score acá deshacía la corrección de la
+  // consulta, porque este sort corre después.
+  list.sort((a, b) =>
+    Number(b.urgente) - Number(a.urgente)
+    || b.maxScore - a.maxScore
+    || new Date(b.latest.created_at) - new Date(a.latest.created_at));
   return list;
+}
+
+// Aplica a un arreglo de filas el cambio de estado que llegó por realtime (o el
+// optimista de quien lo está tocando). Devuelve el MISMO arreglo si la fila no
+// está, para que React no re-renderice una lista que no cambió.
+//
+// Se copian SOLO estos cuatro campos, nada de spread del payload: el evento
+// trae las columnas de sofia_followup_status, y su created_at es el de la fila
+// de ESTADO — un spread pisaría el created_at de la conversación, que es el
+// que ordena la lista y fecha la tarjeta.
+function conEstadoAplicado(rows, statusRow) {
+  let hit = false;
+  const next = rows.map((r) => {
+    if (r.id !== statusRow.conversation_id) return r;
+    hit = true;
+    return {
+      ...r,
+      estado: statusRow.estado,
+      nota: statusRow.nota,
+      actualizado_por: statusRow.actualizado_por,
+      estado_actualizado_en: statusRow.updated_at,
+    };
+  });
+  return hit ? next : rows;
 }
 
 const dateInputStyle = {
@@ -213,7 +279,6 @@ function FilterBar({
   origen, setOrigen, categoria, setCategoria, estado, setEstado, canal, setCanal,
   procedimiento, setProcedimiento,
   search, setSearch,
-  soloUrgentes, setSoloUrgentes, cuantosUrgentes,
 }) {
   const hoyActivo = from === todayISO() && to === todayISO();
   return (
@@ -254,21 +319,11 @@ function FilterBar({
         >
           Hoy
         </button>
-        {cuantosUrgentes > 0 && (
-          <button
-            onClick={() => setSoloUrgentes((v) => !v)}
-            title="Reclamos, complicaciones post-operatorias y pacientes buscando otra clínica"
-            style={{
-              padding: "6px 14px", borderRadius: 999, fontSize: 13, fontWeight: 700,
-              fontFamily: "'Manrope', sans-serif", cursor: "pointer",
-              border: `1.5px solid ${COLORS.danger}`,
-              background: soloUrgentes ? COLORS.danger : COLORS.dangerBg,
-              color: soloUrgentes ? "#fff" : COLORS.danger,
-            }}
-          >
-            ⚠ Urgentes ({cuantosUrgentes})
-          </button>
-        )}
+        {/* Acá vivía el botón "⚠ Urgentes (N)". Lo reemplaza la franja fija de
+            arriba, que muestra los urgentes abiertos siempre, sin depender del
+            rango de fechas ni de que alguien se acuerde de pulsarlo — que era
+            justamente el problema: un caso de riesgo no puede estar detrás de
+            un filtro opcional. */}
         <label style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 13, color: COLORS.textMuted, fontFamily: "'Manrope', sans-serif" }}>
           Hasta
           <input type="date" value={to} min={from} max={todayISO()} onChange={(e) => setTo(e.target.value)} style={dateInputStyle} />
@@ -518,13 +573,16 @@ function FollowupRow({ group, onUpdateStatus, error }) {
                 {subtitulo}
               </span>
             )}
+            {/* Icono en vez del carácter ⚠, que cada sistema operativo dibuja
+                distinto y en algunos sale a color, como un emoji. */}
             {conv.urgente && (
               <span style={{
+                display: "inline-flex", alignItems: "center", gap: 4,
                 padding: "2px 10px", borderRadius: 999, fontSize: 11, fontWeight: 800,
                 letterSpacing: 0.3, background: COLORS.danger, color: "#fff",
                 fontFamily: "'Manrope', sans-serif", whiteSpace: "nowrap",
               }} title="Reclamo, complicación o paciente buscando otra clínica">
-                ⚠ URGENTE
+                <AlertTriangle size={11} strokeWidth={2.5} /> URGENTE
               </span>
             )}
             <Badge variant={conv.categoria === "cirugia" ? "gold" : "default"}>
@@ -628,6 +686,58 @@ function FollowupRow({ group, onUpdateStatus, error }) {
   );
 }
 
+// Franja fija de urgentes. Va arriba de todo y no responde a ningún filtro ni
+// al rango de fechas: son reclamos, complicaciones post-operatorias y pacientes
+// que están buscando otra clínica. El score los enterraba porque mide valor
+// comercial, y un caso de riesgo con un solo mensaje puntúa bajo — así llegó
+// una paciente con sangrado y dolor a la página 98 de 118.
+//
+// Las tarjetas son las mismas de la lista, a propósito: se puede cambiar el
+// estado, abrir Zenvia y dejar nota sin bajar. Al marcarlas con cualquier
+// estado distinto de "pendiente" salen solas de la franja.
+function BandaUrgentes({ filas, onUpdateStatus, rowErrors }) {
+  if (filas.length === 0) return null;
+
+  return (
+    <section
+      aria-label="Casos urgentes"
+      style={{
+        border: `1.5px solid ${COLORS.danger}`, borderRadius: 12,
+        background: COLORS.dangerBg, padding: 16, marginBottom: 24,
+      }}
+    >
+      <header style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap", marginBottom: 14 }}>
+        <AlertTriangle size={17} color={COLORS.danger} strokeWidth={2.5} />
+        <h3 style={{
+          margin: 0, fontSize: 15, fontWeight: 800, color: COLORS.danger,
+          fontFamily: "'Manrope', sans-serif",
+        }}>
+          {filas.length === 1 ? "1 caso urgente sin atender" : `${filas.length} casos urgentes sin atender`}
+        </h3>
+        <span style={{ fontSize: 12.5, color: COLORS.danger, fontFamily: "'Manrope', sans-serif", opacity: 0.85 }}>
+          Reclamos, complicaciones y pacientes buscando otra clínica. Van primero, sin importar el puntaje.
+        </span>
+      </header>
+
+      {filas.map((row) => (
+        <FollowupRow
+          key={row.id}
+          group={{ key: row.id, latest: row, count: 1, maxScore: row.score, urgente: true }}
+          onUpdateStatus={onUpdateStatus}
+          error={rowErrors[row.id]}
+        />
+      ))}
+
+      {filas.length >= URGENTES_TOPE && (
+        <p style={{ margin: "4px 0 0", fontSize: 12, color: COLORS.danger, fontFamily: "'Manrope', sans-serif", fontWeight: 600 }}>
+          Se muestran los {URGENTES_TOPE} más recientes. Que la lista llegue a este tope
+          es señal de que el criterio de urgencia está marcando de más — conviene revisarlo.
+        </p>
+      )}
+    </section>
+  );
+}
+
 export function SeguimientoSection({ profile }) {
   const isMobile = useIsMobile();
   const actor = profile?.full_name || "Equipo comercial";
@@ -641,8 +751,11 @@ export function SeguimientoSection({ profile }) {
   const [canal, setCanal] = useState("todos");
   const [procedimiento, setProcedimiento] = useState("todos");
   const [search, setSearch] = useState("");
-  const [soloUrgentes, setSoloUrgentes] = useState(false);
   const [page, setPage] = useState(1);
+
+  // Los urgentes viven aparte de rawRows porque no comparten alcance: la lista
+  // respeta el rango de fechas y los filtros, la franja no.
+  const [urgentes, setUrgentes] = useState([]);
 
   const [rawRows, setRawRows] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -745,34 +858,35 @@ export function SeguimientoSection({ profile }) {
     return () => { cancelled = true; };
   }, [from, to, reloadKey]);
 
+  // La franja de urgentes se recarga solo al montar y en cada reconexión — no
+  // depende de from/to, que es justamente lo que la hace confiable: mover las
+  // fechas no puede esconder un caso de riesgo.
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      const { data, error: urgErr } = await fetchUrgentesAbiertos();
+      if (cancelled) return;
+      // Un fallo acá no bloquea la pantalla: la lista de abajo sigue sirviendo,
+      // y los urgentes igual salen primeros dentro de ella.
+      if (!urgErr) setUrgentes(data || []);
+    })();
+    return () => { cancelled = true; };
+  }, [reloadKey]);
+
   // Cambiar cualquier filtro vuelve a la página 1 — si no, se puede quedar
   // viendo una página que ya no existe con el filtro nuevo.
-  useEffect(() => { setPage(1); }, [from, to, origen, categoria, estado, canal, procedimiento, search, soloUrgentes]);
+  useEffect(() => { setPage(1); }, [from, to, origen, categoria, estado, canal, procedimiento, search]);
 
   // Aplica a la lista en memoria un cambio hecho por OTRA persona (o por uno
   // mismo en otra pestaña) que llegó por realtime.
   const applyRemoteStatus = useCallback((statusRow) => {
     if (!statusRow?.conversation_id) return;
 
-    setRawRows((rows) => {
-      let hit = false;
-      const next = rows.map((r) => {
-        if (r.id !== statusRow.conversation_id) return r;
-        hit = true;
-        // Se copian SOLO estos cuatro campos, nada de spread del payload: el
-        // evento trae las columnas de sofia_followup_status, y su created_at
-        // es el de la fila de ESTADO — un spread pisaría el created_at de la
-        // conversación, que es el que ordena la lista y fecha la tarjeta.
-        return {
-          ...r,
-          estado: statusRow.estado,
-          nota: statusRow.nota,
-          actualizado_por: statusRow.actualizado_por,
-          estado_actualizado_en: statusRow.updated_at,
-        };
-      });
-      return hit ? next : rows;
-    });
+    // Las dos listas: la de abajo y la franja de urgentes. Si el cambio deja
+    // la conversación en un estado distinto de "pendiente", sale sola de la
+    // franja al pintar.
+    setRawRows((rows) => conEstadoAplicado(rows, statusRow));
+    setUrgentes((rows) => conEstadoAplicado(rows, statusRow));
 
     // Los KPIs se recuentan siempre, aunque la fila no esté en la lista
     // cargada: "En seguimiento abierto" y "Agendados desde el módulo" tienen
@@ -830,15 +944,20 @@ export function SeguimientoSection({ profile }) {
   }, [applyRemoteStatus]);
 
   const updateStatus = useCallback(async (conversationId, patch) => {
-    const prevRow = rawRows.find((r) => r.id === conversationId);
+    // La fila puede venir de la lista o de la franja de urgentes — para el
+    // rollback sirve la que se encuentre primero.
+    const prevRow = rawRows.find((r) => r.id === conversationId)
+      || urgentes.find((r) => r.id === conversationId);
     // El optimista incluye estado_actualizado_en para que el sello de la
     // tarjeta diga "hace un momento" sin esperar el eco del realtime; cuando
     // llega el evento se pisa con el updated_at real del trigger.
-    setRawRows((rows) => rows.map((r) => (
+    const optimista = (rows) => rows.map((r) => (
       r.id === conversationId
         ? { ...r, ...patch, actualizado_por: actor, estado_actualizado_en: new Date().toISOString() }
         : r
-    )));
+    ));
+    setRawRows(optimista);
+    setUrgentes(optimista);
     setRowErrors((errs) => { const next = { ...errs }; delete next[conversationId]; return next; });
 
     const { error: upsertError } = await supabase
@@ -849,17 +968,37 @@ export function SeguimientoSection({ profile }) {
       // Rollback quirúrgico: se repone SOLO esta fila. Antes se restauraba el
       // array entero, y con realtime encima eso borraría los cambios que
       // otras personas hicieron mientras este upsert estaba en vuelo.
-      if (prevRow) setRawRows((rows) => rows.map((r) => (r.id === conversationId ? prevRow : r)));
+      if (prevRow) {
+        const reponer = (rows) => rows.map((r) => (r.id === conversationId ? prevRow : r));
+        setRawRows(reponer);
+        setUrgentes(reponer);
+      }
       setRowErrors((errs) => ({ ...errs, [conversationId]: upsertError.message }));
     } else if (patch.estado) {
       loadKpis(from, to);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [rawRows, actor, loadKpis, from, to]);
+  }, [rawRows, urgentes, actor, loadKpis, from, to]);
+
+  // Lo que se pinta en la franja: solo los que siguen pendientes. Al cambiarle
+  // el estado a uno, sale de acá sin necesidad de recargar.
+  const urgentesAbiertos = useMemo(
+    () => urgentes.filter((r) => r.estado === "pendiente"),
+    [urgentes]
+  );
+
+  // Los que ya están en la franja no se repiten abajo: verlos dos veces en la
+  // misma pantalla se lee como un error del sistema, y además invita a que dos
+  // personas trabajen la misma tarjeta creyendo que son casos distintos.
+  const enLaFranja = useMemo(
+    () => new Set(urgentesAbiertos.map((r) => r.id)),
+    [urgentesAbiertos]
+  );
 
   const filtered = useMemo(() => {
     const q = normalize(search);
     return rawRows.filter((r) => {
+      if (enLaFranja.has(r.id)) return false;
       if (origen !== "todos" && r.origen !== origen) return false;
       if (categoria !== "todos" && r.categoria !== categoria) return false;
       if (estado !== "todos" && r.estado !== estado) return false;
@@ -873,10 +1012,9 @@ export function SeguimientoSection({ profile }) {
       if (q && !normalize(r.procedure_interest).includes(q)
             && !normalize(r.escalation_reason).includes(q)
             && !normalize(r.patient_name).includes(q)) return false;
-      if (soloUrgentes && !r.urgente) return false;
       return true;
     });
-  }, [rawRows, origen, categoria, estado, canal, procedimiento, search, soloUrgentes]);
+  }, [rawRows, enLaFranja, origen, categoria, estado, canal, procedimiento, search]);
 
   const grouped = useMemo(() => groupByPhone(filtered), [filtered]);
   const totalPages = Math.max(1, Math.ceil(grouped.length / PAGE_SIZE));
@@ -887,6 +1025,14 @@ export function SeguimientoSection({ profile }) {
       <SectionHeader
         icon={<PhoneCall size={20} color={COLORS.gold} />}
         subtitle="Conversaciones de Sofía que quedaron abiertas sin venta — escaladas sin cita y cerradas sin escalar, priorizadas por score."
+      />
+
+      {/* Antes que los indicadores y que cualquier filtro: es lo primero que
+          tiene que ver quien abre la pantalla. */}
+      <BandaUrgentes
+        filas={urgentesAbiertos}
+        onUpdateStatus={updateStatus}
+        rowErrors={rowErrors}
       />
 
       <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr 1fr" : "repeat(4,1fr)", gap: 16, marginBottom: 24 }}>
@@ -913,8 +1059,6 @@ export function SeguimientoSection({ profile }) {
 
       <FilterBar
         from={from} to={to} setFrom={setFrom} setTo={setTo}
-        soloUrgentes={soloUrgentes} setSoloUrgentes={setSoloUrgentes}
-        cuantosUrgentes={rawRows.filter((r) => r.urgente && r.estado === "pendiente").length}
         origen={origen} setOrigen={setOrigen}
         categoria={categoria} setCategoria={setCategoria}
         estado={estado} setEstado={setEstado}
