@@ -26,9 +26,14 @@ const MI_VERSION = import.meta.url.match(/index-([A-Za-z0-9_-]+)\.js/)?.[1] ?? n
 const CADA_MS = 10 * 60 * 1000;
 
 async function versionPublicada() {
+  // Se pide "/" y no "/index.html": Cloudflare Pages responde a /index.html
+  // con un 308 hacia "/", así que pedirlo por su nombre cuesta dos viajes en
+  // lugar de uno y deja la revisión colgando de que el navegador siga la
+  // redirección. "/" devuelve el mismo documento y siempre existe.
+  //
   // no-store y un parámetro único: sin esto el navegador puede devolver el
   // index.html que ya tenía en caché, que es justamente el viejo.
-  const res = await fetch(`/index.html?v=${Date.now()}`, { cache: "no-store" });
+  const res = await fetch(`/?v=${Date.now()}`, { cache: "no-store" });
   if (!res.ok) return null;
   const html = await res.text();
   return html.match(/\/assets\/index-([A-Za-z0-9_-]+)\.js/)?.[1] ?? null;
