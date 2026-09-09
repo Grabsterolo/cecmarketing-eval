@@ -45,7 +45,7 @@ export async function callerIsAuthenticated(env, request) {
 // que dice qué hacer y no solo qué pasó.
 export function respuestaNoAutorizado() {
   return new Response(
-    JSON.stringify({ error: "Tu sesión venció o no está iniciada. Volvé a iniciar sesión e intentá de nuevo." }),
+    JSON.stringify({ error: "La sesión expiró o no está iniciada. Inicie sesión de nuevo." }),
     { status: 401, headers: { "content-type": "application/json" } }
   );
 }

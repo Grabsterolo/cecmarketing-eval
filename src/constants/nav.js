@@ -2,7 +2,7 @@ import {
   Home, LayoutDashboard, Sparkles, Settings2, Settings, FlaskConical, ShieldCheck, Cake, MessageCircle, PhoneCall, Users,
 } from "lucide-react";
 
-export const ROTATING_WORDS = ["campañas", "conversaciones", "métricas", "recomendaciones", "tu marca"];
+export const ROTATING_WORDS = ["campañas", "conversaciones", "métricas", "recomendaciones", "su marca"];
 
 // Items de navegación principal. La condición controla qué se muestra
 // según si las integraciones ya están conectadas (ver Fase 3 del roadmap).

@@ -660,6 +660,7 @@ function NotaEditor({ conversationId, initialNota, onSave }) {
 
 function FollowupRow({ group, onUpdateStatus, error }) {
   const [notaOpen, setNotaOpen] = useState(false);
+  const [esperaAbierta, setEsperaAbierta] = useState(false);
   const conv = group.latest;
   const sentimentInfo = SENTIMENT_ICON[normalize(conv.sentiment)];
   // El nombre manda, el procedimiento pasa a subtítulo. Un asesor llama a
@@ -746,22 +747,14 @@ function FollowupRow({ group, onUpdateStatus, error }) {
             if (nuevo !== "en_espera") {
               // Salir de "en espera" limpia la fecha: si no, quedaría una
               // fecha vieja colgando que confunde al leer la fila.
+              setEsperaAbierta(false);
               onUpdateStatus(conv.id, { estado: nuevo, esperar_hasta: null });
               return;
             }
-            const dias = window.prompt(
-              "¿En cuántos días vuelve a aparecer?\n\nEscribí 5, 15 o 30. Mientras tanto sale de la lista de pendientes.",
-              "15"
-            );
-            if (dias === null) return;
-            const n = parseInt(dias, 10);
-            if (!Number.isFinite(n) || n < 1 || n > 365) {
-              window.alert("Poné un número de días entre 1 y 365.");
-              return;
-            }
-            const hasta = new Date();
-            hasta.setDate(hasta.getDate() + n);
-            onUpdateStatus(conv.id, { estado: "en_espera", esperar_hasta: hasta.toISOString() });
+            // El <select> es controlado por conv.estado, así que si no se
+            // guarda nada vuelve solo a lo que estaba: abrir el selector de
+            // plazo no compromete el cambio hasta que se elige un plazo.
+            setEsperaAbierta(true);
           }}
           style={{ ...SELECT_STYLE, flexShrink: 0 }}
         >
@@ -783,6 +776,58 @@ function FollowupRow({ group, onUpdateStatus, error }) {
           <ChevronDown size={16} style={{ transition: "transform 0.2s", transform: notaOpen ? "rotate(180deg)" : "none" }} />
         </button>
       </div>
+
+      {/* Antes esto era un window.prompt que pedía escribir un número del 1 al
+          365, con un window.alert de error si no lo era. Solo hay tres plazos
+          con sentido, así que se eligen; no se escriben. Y se ven: la ventana
+          del navegador no tiene los colores del sistema y algunos navegadores
+          la bloquean.
+
+          Puede que fuera el motivo de que el estado casi no se usara — 6 de
+          más de 800 conversaciones trabajadas — siendo el que describe el
+          desenlace más común. */}
+      {esperaAbierta && (
+        <div style={{
+          display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap",
+          marginTop: 12, paddingTop: 12, borderTop: `1px solid ${COLORS.border}`,
+        }}>
+          <span style={{ fontSize: 13, color: COLORS.text, fontFamily: "'Manrope', sans-serif" }}>
+            ¿Cuándo vuelve a la lista?
+          </span>
+          {ESPERA_OPCIONES.map((opcion) => (
+            <button
+              key={opcion.dias}
+              onClick={() => {
+                const hasta = new Date();
+                hasta.setDate(hasta.getDate() + opcion.dias);
+                setEsperaAbierta(false);
+                onUpdateStatus(conv.id, { estado: "en_espera", esperar_hasta: hasta.toISOString() });
+              }}
+              style={{
+                background: COLORS.panelAlt, color: COLORS.green,
+                border: `1px solid ${COLORS.border}`, borderRadius: 8,
+                padding: "6px 14px", fontSize: 13, fontWeight: 700,
+                fontFamily: "'Manrope', sans-serif", cursor: "pointer",
+              }}
+            >
+              {opcion.label}
+            </button>
+          ))}
+          <button
+            onClick={() => setEsperaAbierta(false)}
+            style={{
+              background: "none", border: "none", padding: "6px 4px",
+              fontSize: 13, color: COLORS.textMuted, fontFamily: "'Manrope', sans-serif",
+              cursor: "pointer", textDecoration: "underline",
+            }}
+          >
+            Cancelar
+          </button>
+          <span style={{ fontSize: 12, color: COLORS.textMuted, fontFamily: "'Manrope', sans-serif", width: "100%" }}>
+            Sale de pendientes y vuelve sola en esa fecha. Al retomarla, el siguiente paso es una llamada.
+          </span>
+        </div>
+      )}
 
       {error && (
         <p style={{ margin: "10px 0 0", fontSize: 12, color: COLORS.danger, fontFamily: "'Manrope', sans-serif" }}>
@@ -1197,7 +1242,7 @@ export function SeguimientoSection({ profile }) {
 
       {loading && (
         <p style={{ textAlign: "center", fontSize: 14, color: COLORS.textMuted, fontFamily: "'Manrope', sans-serif", padding: "40px 0" }}>
-          Cargando seguimiento...
+          Cargando...
         </p>
       )}
 
@@ -1205,7 +1250,7 @@ export function SeguimientoSection({ profile }) {
         <EmptyState
           title="Sin conversaciones para estos filtros"
           description={rawRows.length > 0
-            ? "Ninguna conversación del rango elegido califica con los filtros actuales — probá ampliar el rango o cambiar un filtro."
+            ? "Ninguna conversación del rango elegido cumple los filtros actuales. Amplíe el rango de fechas o quite alguno de los filtros."
             : "No hay conversaciones que califiquen para seguimiento en este rango de fechas."}
         />
       )}

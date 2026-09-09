@@ -145,7 +145,7 @@ export async function onRequestPost({ request, env }) {
       );
       const others = othersRes.ok ? await othersRes.json() : [];
       if (others.length === 0) {
-        return json({ error: "No podés quitarte el rol de administrador: sos el único admin." }, 400);
+        return json({ error: "No se puede quitar el rol de administrador: es el único que queda." }, 400);
       }
     }
 

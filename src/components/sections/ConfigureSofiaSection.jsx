@@ -313,7 +313,7 @@ export function ConfigureSofiaSection() {
         </p>
       </Card>
 
-      {loading && <p style={{ fontSize: 14, color: COLORS.textMuted }}>Cargando configuración...</p>}
+      {loading && <p style={{ fontSize: 14, color: COLORS.textMuted }}>Cargando...</p>}
 
       {error && (
         <Card>
