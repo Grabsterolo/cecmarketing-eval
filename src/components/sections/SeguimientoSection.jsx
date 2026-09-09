@@ -106,6 +106,14 @@ function daysAgoISO(n) {
   return crDateStr(new Date(Date.now() - n * 86400000));
 }
 
+// Cuántos días abarca el rango. Antes el aviso repetía las dos fechas en
+// crudo —"del 2026-08-09 al 2026-09-08"— justo al lado de los dos selectores
+// que ya las muestran, y en formato ISO, que no es el que usa nadie acá.
+function diasEnRango(desde, hasta) {
+  const ms = new Date(`${hasta}T00:00:00`) - new Date(`${desde}T00:00:00`);
+  return Math.round(ms / 86400000) + 1;
+}
+
 function clampToMinDate(value) {
   return value < MIN_DATE ? MIN_DATE : value;
 }
@@ -556,7 +564,7 @@ function FilterBar({
 
         {rangoActivo && (
           <span style={{ fontSize: 12, color: COLORS.textMuted, fontFamily: "'Manrope', sans-serif" }}>
-            {from === to ? "1 día" : "del " + from + " al " + to}
+            {from === to ? "1 día" : `${diasEnRango(from, to)} días`}
           </span>
         )}
       </div>
@@ -1040,10 +1048,11 @@ function FollowupRow({ group, onUpdateStatus, error, miId }) {
 // paciente concreto o revisar lo de otro — pero deja de ser lo primero que se
 // ve al entrar.
 function CabeceraMiLista({
-  modo, setModo, mios, total, tomando, onTomar, onSoltar, error,
+  modo, setModo, misConversaciones, misPendientes, misAsignadosPendientes,
+  total, tomando, tomados, onTomar, onSoltar, error,
 }) {
   const enMiLista = modo === "mias";
-  const faltan = LISTA_DEL_DIA - mios;
+  const faltan = LISTA_DEL_DIA - misAsignadosPendientes;
 
   const tab = (activo) => ({
     padding: "7px 16px", borderRadius: 999, fontSize: 13.5, fontWeight: 700,
@@ -1053,11 +1062,28 @@ function CabeceraMiLista({
     color: activo ? "#fff" : COLORS.text,
   });
 
+  // El resumen tiene que decir lo mismo que los contadores de abajo. Antes
+  // hablaba solo de lo asignado y contradecía al "Todos 8" de la fila de
+  // estados; ahora sale del mismo conjunto.
+  function resumen() {
+    if (!enMiLista) {
+      return `${total.toLocaleString("es-CR")} conversaciones en la cola completa, de todos los asesores.`;
+    }
+    if (misConversaciones === 0) {
+      return `No tiene conversaciones a su nombre. Tome ${LISTA_DEL_DIA} leads del principio de la cola para empezar el día.`;
+    }
+    const suyas = `${misConversaciones} ${misConversaciones === 1 ? "conversación" : "conversaciones"} a su nombre`;
+    if (misPendientes === 0) {
+      return `${suyas}, todas trabajadas. Puede tomar más leads de la cola.`;
+    }
+    return `${suyas}. ${misPendientes} ${misPendientes === 1 ? "queda pendiente" : "quedan pendientes"} de trabajar.`;
+  }
+
   return (
     <div style={{ marginBottom: 20 }}>
       <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
         <button onClick={() => setModo("mias")} aria-pressed={enMiLista} style={tab(enMiLista)}>
-          Mi lista {mios > 0 && `(${mios})`}
+          Mi lista {misConversaciones > 0 && `(${misConversaciones})`}
         </button>
         <button onClick={() => setModo("todas")} aria-pressed={!enMiLista} style={tab(!enMiLista)}>
           Toda la cola
@@ -1067,6 +1093,7 @@ function CabeceraMiLista({
           <button
             onClick={onTomar}
             disabled={tomando}
+            title={`Asigna a su nombre los mejores ${faltan} leads que nadie más tenga, tomados del principio de la cola.`}
             style={{
               background: COLORS.gold, color: "#fff", border: "none", borderRadius: 8,
               padding: "8px 16px", fontSize: 13, fontWeight: 700,
@@ -1076,16 +1103,17 @@ function CabeceraMiLista({
           >
             {tomando
               ? "Tomando..."
-              : mios === 0
+              : misAsignadosPendientes === 0
                 ? `Tomar mis ${LISTA_DEL_DIA} leads`
-                : `Completar mi lista (+${faltan})`}
+                : `Completar mi lista a ${LISTA_DEL_DIA}`}
           </button>
         )}
 
-        {enMiLista && mios > 0 && (
+        {enMiLista && misAsignadosPendientes > 0 && (
           <button
             onClick={onSoltar}
             disabled={tomando}
+            title="Devuelve a la cola los leads asignados que todavía no ha trabajado, para que otro asesor pueda tomarlos."
             style={{
               background: "none", border: "none", padding: "8px 4px",
               fontSize: 12.5, color: COLORS.textMuted, fontFamily: "'Manrope', sans-serif",
@@ -1098,12 +1126,17 @@ function CabeceraMiLista({
       </div>
 
       <p style={{ margin: "10px 0 0", fontSize: 12.5, color: COLORS.textMuted, fontFamily: "'Manrope', sans-serif" }}>
-        {enMiLista
-          ? mios === 0
-            ? `Su lista está vacía. Tome ${LISTA_DEL_DIA} leads del principio de la cola para empezar el día.`
-            : `${mios} ${mios === 1 ? "lead pendiente" : "leads pendientes"} a su nombre. Los que no trabaje regresan a la cola en 3 días.`
-          : `${total.toLocaleString("es-CR")} conversaciones en la cola completa, de todos los asesores.`}
+        {resumen()}
+        {enMiLista && misAsignadosPendientes > 0 && " Los asignados que no trabaje regresan a la cola en 3 días."}
       </p>
+
+      {/* Cuántos trajo de verdad, no cuántos se pidieron: si otro asesor se
+          llevó candidatos en el medio, el número real es menor. */}
+      {tomados !== null && (
+        <p style={{ margin: "6px 0 0", fontSize: 12.5, fontWeight: 700, color: COLORS.success, fontFamily: "'Manrope', sans-serif" }}>
+          Se agregaron {tomados} {tomados === 1 ? "lead" : "leads"} a su lista.
+        </p>
+      )}
 
       {error && (
         <p style={{ margin: "8px 0 0", fontSize: 12.5, color: COLORS.danger, fontFamily: "'Manrope', sans-serif" }}>
@@ -1189,6 +1222,7 @@ export function SeguimientoSection({ profile }) {
   // hacer. La cola completa sigue a un clic para buscar un paciente concreto.
   const [modo, setModo] = useState("mias");
   const [tomando, setTomando] = useState(false);
+  const [tomados, setTomados] = useState(null);
   const [errorLista, setErrorLista] = useState(null);
 
   // Los urgentes viven aparte de rawRows porque no comparten alcance: la lista
@@ -1318,12 +1352,14 @@ export function SeguimientoSection({ profile }) {
   const tomarMiLista = useCallback(async () => {
     setTomando(true);
     setErrorLista(null);
+    setTomados(null);
     const { data, error: rpcError } = await supabase.rpc("asignar_mi_lista", { p_limite: LISTA_DEL_DIA });
     if (rpcError) {
       setErrorLista(`No se pudo tomar la lista: ${rpcError.message}`);
     } else if (data === 0) {
       setErrorLista("No quedan leads sin asignar en la cola. Los demás asesores ya los tienen.");
     } else {
+      setTomados(data);
       setReloadKey((k) => k + 1);
     }
     setTomando(false);
@@ -1332,6 +1368,7 @@ export function SeguimientoSection({ profile }) {
   const soltarMiLista = useCallback(async () => {
     setTomando(true);
     setErrorLista(null);
+    setTomados(null);
     const { error: rpcError } = await supabase.rpc("soltar_mi_lista");
     if (rpcError) setErrorLista(`No se pudo soltar la lista: ${rpcError.message}`);
     else setReloadKey((k) => k + 1);
@@ -1454,7 +1491,35 @@ export function SeguimientoSection({ profile }) {
 
   // Cuántos leads tiene el asesor pendientes a su nombre. Se cuenta sobre el
   // rango cargado, que es de dónde sale la lista que va a trabajar.
+  // Tres números distintos, y hacen falta los tres. Mezclarlos fue lo que hizo
+  // que el encabezado dijera "su lista está vacía" mientras los contadores de
+  // abajo mostraban 8 conversaciones — dos definiciones de "mi lista" en la
+  // misma pantalla, contradiciéndose.
+  //
+  //   misConversaciones      lo mío en total: asignado a mí O trabajado por mí.
+  //                          Es lo que cuentan los contadores de estado.
+  //   misPendientes          de eso, lo que falta trabajar. Es el "Pendiente N".
+  //   misAsignadosPendientes solo lo ASIGNADO y pendiente. Es lo único que mira
+  //                          asignar_mi_lista() en Postgres, así que es lo que
+  //                          decide si el botón de tomar leads tiene sentido.
+  //                          Si el botón usara otro número, prometería una
+  //                          cantidad distinta de la que va a traer.
+  const esMio = useCallback(
+    (r) => r.asignado_a === miId || r.actualizado_por === actor,
+    [miId, actor]
+  );
+
+  const misConversaciones = useMemo(
+    () => rawRows.filter(esMio).length,
+    [rawRows, esMio]
+  );
+
   const misPendientes = useMemo(
+    () => rawRows.filter((r) => esMio(r) && r.estado === "pendiente").length,
+    [rawRows, esMio]
+  );
+
+  const misAsignadosPendientes = useMemo(
     () => rawRows.filter((r) => r.asignado_a === miId && r.estado === "pendiente").length,
     [rawRows, miId]
   );
@@ -1480,7 +1545,7 @@ export function SeguimientoSection({ profile }) {
       // Lo segundo hace falta porque la asignación se vence a los 3 días: sin
       // esto, lo que contactó el jueves desaparecía de su lista el domingo y el
       // contador de "Contactados" mostraba menos trabajo del que realmente hizo.
-      if (modo === "mias" && r.asignado_a !== miId && r.actualizado_por !== actor) return false;
+      if (modo === "mias" && !esMio(r)) return false;
       if (origen !== "todos" && r.origen !== origen) return false;
       if (categoria !== "todos" && r.categoria !== categoria) return false;
       if (canal !== "todos" && r.channel !== canal) return false;
@@ -1495,7 +1560,7 @@ export function SeguimientoSection({ profile }) {
             && !normalize(r.patient_name).includes(q)) return false;
       return true;
     });
-  }, [rawRows, enLaFranja, modo, miId, actor, origen, categoria, canal, procedimiento, search]);
+  }, [rawRows, enLaFranja, modo, esMio, origen, categoria, canal, procedimiento, search]);
 
   const conteos = useMemo(() => {
     const c = {};
@@ -1523,8 +1588,12 @@ export function SeguimientoSection({ profile }) {
           tiene que ver quien abre la pantalla. */}
       <CabeceraMiLista
         modo={modo} setModo={setModo}
-        mios={misPendientes} total={rawRows.length}
-        tomando={tomando} onTomar={tomarMiLista} onSoltar={soltarMiLista}
+        misConversaciones={misConversaciones}
+        misPendientes={misPendientes}
+        misAsignadosPendientes={misAsignadosPendientes}
+        total={rawRows.length}
+        tomando={tomando} tomados={tomados}
+        onTomar={tomarMiLista} onSoltar={soltarMiLista}
         error={errorLista}
       />
 
@@ -1586,7 +1655,7 @@ export function SeguimientoSection({ profile }) {
       )}
 
       {!loading && !error && pageItems.length === 0 && (
-        modo === "mias" && misPendientes === 0 ? (
+        modo === "mias" && misConversaciones === 0 ? (
           // En "Mi lista" el vacío no es un problema de filtros: es que
           // todavía no tomó leads. Decirle que amplíe el rango lo mandaría a
           // buscar donde no está la solución.
