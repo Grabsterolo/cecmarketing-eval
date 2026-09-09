@@ -12,7 +12,7 @@ export const NAV_ITEMS = [
   { key: "metricas-sofia", label: "Métricas Sofía", icon: MessageCircle },
   { key: "recomendaciones", label: "Recomendaciones", icon: Sparkles },
   { key: "seguimiento", label: "Seguimiento", icon: PhoneCall },
-  { key: "pacientes", label: "Pacientes", icon: Users },
+  { key: "contactos", label: "Contactos", icon: Users },
   { key: "auditoria-sofia", label: "Auditoría de Sofía", icon: ShieldCheck },
   { key: "configurar-sofia", label: "Configurar a Sofía", icon: Settings2 },
   { key: "probar-sofia", label: "Probar a Sofía", icon: FlaskConical },

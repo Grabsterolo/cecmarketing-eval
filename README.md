@@ -24,7 +24,7 @@ src/
       SofiaMetricsSection.jsx   — Métricas Sofía: volumen, escalación, temas, calidad
       RecommendationsSection.jsx— análisis por período que cruza Meta con Sofía
       SeguimientoSection.jsx    — cola de conversaciones abiertas sin venta
-      PacientesSection.jsx      — base de pacientes: teléfono, interés, actividad
+      ContactosSection.jsx      — directorio de contactos: teléfono, interés, actividad
       SofiaAuditSection.jsx     — autoauditorías de Sofía
       ConfigureSofiaSection.jsx — editor del prompt y base de conocimiento
       TestSofiaSection.jsx      — Probar a Sofía
@@ -85,7 +85,7 @@ Login, dashboard, sidebar y "Configurar a Sofía" contra Supabase.
 **Fase 2 — Conversaciones de Sofía** *(hecho)*
 `sofia_conversations` recibe datos del Worker desde el 2026-07-26. Al
 2026-09-03 son **10.983** conversaciones reales, repartidas en Métricas
-Sofía, Seguimiento y Pacientes.
+Sofía, Seguimiento y Contactos.
 
 **Fase 3 — Conectar Meta y Google** *(hecho — Meta en vivo; Google se retiró)*
 `MetricsSection.jsx` ("Métricas Meta" en el nav) corre con datos reales de Meta Ads, sin mock data (CPL, gráfico gasto vs leads, insight automático). Google Ads/Analytics se integró primero (commit `8da8f0b`) pero se quitó del dashboard por decisión de producto — "resultó poco práctico" (commit `2039363`), no por falta de acceso. `DATA_SOURCES` en `nav.js` solo lista `meta` y `sofia`, ambos `connected: true`.
@@ -151,7 +151,7 @@ Las que importan para que el dashboard funcione:
 | `sofia_home_stats_rpc` | Función `sofia_home_stats()`: todas las cifras de Inicio en una llamada. |
 | `sofia_set_phones_rpc` | Función `sofia_set_phones()`: escribe teléfonos. SECURITY DEFINER, solo service_role. |
 | `sofia_conversations_updated_at` | Columna `updated_at` + trigger. |
-| `sofia_pacientes_v2` | Vista `sofia_pacientes`, base de la sección Pacientes. |
+| `sofia_pacientes_v2` | Vista `sofia_pacientes`, base de la sección Contactos. La vista conserva el nombre viejo: es interno y renombrarla obligaría a coordinar migración y despliegue al minuto. |
 | `seguimiento_realtime_y_actor` | Expone `estado_actualizado_en` en `sofia_followup_queue` y mete `sofia_followup_status` en la publicación `supabase_realtime`. Es lo que hace que Seguimiento se sincronice en vivo entre usuarios. |
 
 **Hecho el 2026-08-27:** el SQL está en `supabase/migrations/`. Lo que sigue
@@ -293,7 +293,7 @@ lo que cobre Zenvia por mensaje — ese contrato no está a la vista.
 
 `sofia_conversations` guardaba solo `phone_hash` (SHA-256, irreversible) por
 privacidad. **El 2026-08-27 se revirtió esa decisión a pedido del cliente**
-para poder tener la sección Pacientes:
+para poder tener la sección Contactos (entonces llamada Pacientes):
 
 - El Worker ahora guarda `phone_number` en claro en cada conversación nueva
   (ya tenía el número; lo usaba para el hash y lo descartaba).
