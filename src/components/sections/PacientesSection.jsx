@@ -216,14 +216,14 @@ export function PacientesSection() {
           <option value="sin">Sin teléfono</option>
         </select>
         <span style={{ fontSize: 12.5, color: COLORS.textMuted, fontFamily: "'Manrope', sans-serif" }}>
-          {cargando ? "Buscando..." : `${total.toLocaleString("es-CR")} ${total === 1 ? "paciente" : "pacientes"}`}
+          {cargando ? "Cargando..." : `${total.toLocaleString("es-CR")} ${total === 1 ? "paciente" : "pacientes"}`}
         </span>
       </div>
 
       {error && <ErrorBanner>{error}</ErrorBanner>}
 
       {!cargando && !error && filas.length === 0 && (
-        <EmptyState title="Sin pacientes para estos filtros" description="Probá con otro procedimiento o limpiá la búsqueda." />
+        <EmptyState title="Sin pacientes para estos filtros" description="Pruebe con otro procedimiento o borre la búsqueda." />
       )}
 
       {filas.length > 0 && (

@@ -199,7 +199,7 @@ export function RecommendationsSection() {
       {/* Loading */}
       {loading && (
         <p style={{ textAlign: "center", fontSize: 14, color: COLORS.textMuted, fontFamily: "'Manrope', sans-serif", padding: "40px 0" }}>
-          Cargando análisis...
+          Cargando...
         </p>
       )}
 

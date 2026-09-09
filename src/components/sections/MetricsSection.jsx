@@ -96,7 +96,7 @@ export function MetricsSection() {
 
         {metaLoading && (
           <p style={{ fontSize: 14, color: COLORS.textMuted, fontFamily: "'Manrope', sans-serif", textAlign: "center", padding: "32px 0", margin: 0 }}>
-            Cargando métricas...
+            Cargando...
           </p>
         )}
 

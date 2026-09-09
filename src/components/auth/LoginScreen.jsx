@@ -48,8 +48,8 @@ function LoginForm({ onLogin }) {
 
   async function handleLogin() {
     setError(null);
-    if (!emailValue.trim()) { setError("Ingresa tu correo corporativo."); return; }
-    if (!passwordValue) { setError("Ingresa tu contraseña."); return; }
+    if (!emailValue.trim()) { setError("Escriba su correo corporativo."); return; }
+    if (!passwordValue) { setError("Escriba su contraseña."); return; }
     setLoading(true);
     const { error: authError } = await supabase.auth.signInWithPassword({ email: emailValue.trim(), password: passwordValue });
     setLoading(false);
@@ -69,7 +69,7 @@ function LoginForm({ onLogin }) {
       </h1>
       <div style={anim(160)}><RotatingWord noAnim={noAnim} /></div>
       <p style={{ color: COLORS.textMuted, fontSize: 13, marginBottom: 28, lineHeight: 1.6, ...anim(220) }}>
-        Ingresa con tu correo institucional para continuar.
+        Inicie sesión con su correo institucional.
       </p>
       <label style={{ fontSize: 12, color: COLORS.textMuted, display: "block", marginBottom: 6, fontWeight: 600, letterSpacing: "0.02em", ...anim(280) }}>Correo corporativo</label>
       <input

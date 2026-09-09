@@ -15,7 +15,7 @@ import { PasswordInput } from "../ui/PasswordInput.jsx";
 
 async function callAdminUsers(payload) {
   const { data: { session } } = await supabase.auth.getSession();
-  if (!session) throw new Error("Tu sesión expiró. Vuelve a iniciar sesión.");
+  if (!session) throw new Error("La sesión expiró. Inicie sesión de nuevo.");
   const res = await fetch("/api/admin-users", {
     method: "POST",
     headers: {
@@ -219,7 +219,7 @@ export function ConfiguracionSection({ profile }) {
       {error && <ErrorBanner>{error}</ErrorBanner>}
 
       {users === null && !error && (
-        <p style={{ fontSize: 13, color: COLORS.textMuted, fontFamily: "'Manrope', sans-serif" }}>Cargando usuarios...</p>
+        <p style={{ fontSize: 13, color: COLORS.textMuted, fontFamily: "'Manrope', sans-serif" }}>Cargando...</p>
       )}
 
       {users && users.length === 0 && (

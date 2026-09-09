@@ -8,7 +8,7 @@ import { supabase } from "./supabase.js";
 export async function fetchApiAutenticado(path, options = {}) {
   const { data: { session } } = await supabase.auth.getSession();
   if (!session?.access_token) {
-    throw new Error("Sesión expirada. Volvé a iniciar sesión.");
+    throw new Error("La sesión expiró. Inicie sesión de nuevo.");
   }
   const res = await fetch(path, {
     ...options,

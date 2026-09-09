@@ -113,7 +113,7 @@ export function TestSofiaSection() {
       // este aviso, la respuesta se leería como si el borrador en pantalla
       // fuera el que se probó.
       if (data?.prompt_source === "saved") {
-        setSendError("Tu sesión venció, así que esta respuesta usó el prompt guardado, no el que tenés en pantalla. Volvé a iniciar sesión para probar tus cambios.");
+        setSendError("La sesión venció, así que esta respuesta usó el prompt guardado y no el que está en pantalla. Inicie sesión de nuevo para probar los cambios.");
       }
       const reply = data?.reply ?? "(Sin respuesta)";
       setMessages(prev => [...prev, {
@@ -167,7 +167,7 @@ export function TestSofiaSection() {
       </Card>
 
       {loading && (
-        <p style={{ fontSize: 14, color: COLORS.textMuted }}>Cargando configuración de Sofía...</p>
+        <p style={{ fontSize: 14, color: COLORS.textMuted }}>Cargando...</p>
       )}
 
       {error && (

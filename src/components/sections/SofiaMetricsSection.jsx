@@ -226,7 +226,7 @@ function QualityCard({ audit, auditLoading, setActive }) {
       </h3>
       {auditLoading && (
         <p style={{ margin: 0, fontSize: 13, color: COLORS.textMuted, fontFamily: "'Manrope', sans-serif" }}>
-          Cargando auditoría...
+          Cargando...
         </p>
       )}
       {!auditLoading && !audit && (
@@ -434,14 +434,14 @@ export function SofiaMetricsSection({ setActive }) {
 
       {loading && (
         <p style={{ textAlign: "center", fontSize: 14, color: COLORS.textMuted, fontFamily: "'Manrope', sans-serif", padding: "40px 0" }}>
-          Cargando métricas de Sofía...
+          Cargando...
         </p>
       )}
 
       {!loading && !error && rangeBeforeData && (
         <Card>
           <p style={{ margin: 0, fontSize: 13, color: COLORS.textMuted, fontFamily: "'Manrope', sans-serif", lineHeight: 1.6 }}>
-            Los datos reales de Sofía arrancan el 26 de julio de 2026 — el rango elegido no tiene conversaciones que mostrar. Probá un rango que incluya fechas a partir de esa día.
+            Los datos reales de Sofía arrancan el 26 de julio de 2026 y el rango elegido no tiene conversaciones que mostrar. Elija un rango que incluya fechas desde esa fecha en adelante.
           </p>
         </Card>
       )}

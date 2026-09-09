@@ -7,7 +7,7 @@ export function translateError(msg = "") {
   if (m.includes("signups not allowed") || m.includes("signup is disabled")) return "El registro no está disponible en este momento.";
   if (m.includes("too many requests") || m.includes("rate limit")) return "Demasiados intentos. Espera un momento e intenta de nuevo.";
   if (m.includes("network") || m.includes("failed to fetch") || m.includes("fetch")) return "Error de conexión. Verifica tu internet.";
-  if (m.includes("jwt expired") || m.includes("session expired")) return "Tu sesión ha expirado. Vuelve a iniciar sesión.";
+  if (m.includes("jwt expired") || m.includes("session expired")) return "La sesión expiró. Inicie sesión de nuevo.";
   if (m.includes("row-level security") || m.includes("rls") || m.includes("policy")) return "No tienes permisos para realizar esta acción.";
   if (m.includes("duplicate") || m.includes("unique")) return "Ya existe un registro con estos datos.";
 if (m.includes("not found") || m.includes("no rows")) return "No se encontró el registro solicitado.";
