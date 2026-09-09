@@ -190,7 +190,8 @@ Rica**, y está detrás del interruptor `sofia_config.followup_enabled`.
 
 ### 4.3 Dashboard (`cecmarketing`)
 
-`https://cecmarketing.pages.dev`
+Los endpoints cuelgan de la dirección del panel, que se omite acá igual que la
+del Worker. Todos exigen sesión iniciada.
 
 | Endpoint | Para qué |
 |---|---|
