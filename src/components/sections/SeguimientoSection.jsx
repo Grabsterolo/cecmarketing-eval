@@ -54,6 +54,27 @@ const ESTADO_LABEL = {
 };
 const ESTADO_OPTIONS = ["pendiente", "contactado", "agendo", "en_espera", "descartado", "no_contactable"];
 
+// Para qué sirve cada estado, en las palabras de quien va a elegirlo. Salen al
+// pasar el cursor por los contadores y por el selector de cada tarjeta.
+//
+// No es adorno: elegir mal el estado es lo que hace perder un lead. "Descartado"
+// y "No contactable" se parecen y significan cosas distintas, y "En espera" —el
+// que describe el desenlace más común— no se entiende por su nombre.
+const ESTADO_AYUDA = {
+  pendiente:
+    "Nadie lo ha trabajado todavía. Es donde entra toda conversación que Sofía dejó abierta.",
+  contactado:
+    "Ya se le llamó o escribió y la conversación sigue viva, pero todavía no hay cita.",
+  agendo:
+    "Consiguió la cita. Sale de la cola y cuenta como resultado del módulo.",
+  en_espera:
+    "La pelota está del lado del paciente: dijo que él escribe, o no contestó. Sale de pendientes y vuelve solo en la fecha que elija. Al volver, el siguiente paso es una llamada, no un mensaje.",
+  descartado:
+    "No hay interés real o no califica. Se pierde de la cola, así que úselo solo cuando esté seguro.",
+  no_contactable:
+    "El número no sirve o pidió que no lo contacten más. Distinto de descartado: acá el problema es el canal, no el interés.",
+};
+
 // Cuánto esperar cuando el paciente dijo que él escribe. La conversación sale de
 // la lista activa y VUELVE SOLA pasada la fecha — lo calcula la vista al
 // consultar, no hay proceso que la despierte.
@@ -395,11 +416,61 @@ const dateInputStyle = {
   outline: "none", fontFamily: "'Manrope', sans-serif",
 };
 
+// Contadores por estado, como botones. Reemplazan el menú desplegable de
+// "Estado": el menú escondía el dato que un asesor quiere ver sin buscarlo —
+// cuánto lleva hecho hoy. Acá el volumen se lee de un vistazo y además filtra.
+//
+// Los números respetan todos los demás filtros MENOS el de estado, que es lo
+// que los hace comparables entre sí: si "Contactados (5)" cambiara al filtrar
+// por estado, no serviría para nada.
+function ContadoresEstado({ estado, setEstado, conteos, total }) {
+  const chip = (activo, resaltado) => ({
+    display: "inline-flex", alignItems: "baseline", gap: 6,
+    padding: "6px 13px", borderRadius: 999, fontSize: 13,
+    fontFamily: "'Manrope', sans-serif", cursor: "pointer", whiteSpace: "nowrap",
+    fontWeight: activo ? 700 : 600,
+    border: `1.5px solid ${activo ? COLORS.green : COLORS.border}`,
+    background: activo ? COLORS.green : "transparent",
+    color: activo ? "#fff" : (resaltado ? COLORS.text : COLORS.textMuted),
+  });
+
+  return (
+    <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+      <button
+        onClick={() => setEstado("todos")}
+        aria-pressed={estado === "todos"}
+        title="Todas las conversaciones, sin importar en qué estado estén."
+        style={chip(estado === "todos", true)}
+      >
+        Todos
+        <span style={{ fontVariantNumeric: "tabular-nums" }}>{total}</span>
+      </button>
+
+      {ESTADO_OPTIONS.map((v) => {
+        const n = conteos[v] || 0;
+        return (
+          <button
+            key={v}
+            onClick={() => setEstado(v)}
+            aria-pressed={estado === v}
+            title={ESTADO_AYUDA[v]}
+            style={chip(estado === v, n > 0)}
+          >
+            {ESTADO_LABEL[v]}
+            <span style={{ fontVariantNumeric: "tabular-nums" }}>{n}</span>
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
 function FilterBar({
   from, to, setFrom, setTo,
   origen, setOrigen, categoria, setCategoria, estado, setEstado, canal, setCanal,
   procedimiento, setProcedimiento,
   search, setSearch,
+  conteos, totalSinEstado,
 }) {
   const hoyActivo = from === todayISO() && to === todayISO();
 
@@ -464,12 +535,7 @@ function FilterBar({
           Hoy
         </button>
 
-        {/* Los dos que sí se usan todos los días. */}
-        <select value={estado} onChange={(e) => setEstado(e.target.value)} style={SELECT_STYLE}>
-          <option value="todos">Estado: todos</option>
-          {ESTADO_OPTIONS.map((v) => <option key={v} value={v}>{ESTADO_LABEL[v]}</option>)}
-        </select>
-
+        {/* El estado ya no es un menú: son los contadores de abajo. */}
         <FilterSelect value={procedimiento} onChange={setProcedimiento} options={PROCEDURE_OPTIONS} />
 
         <button
@@ -531,6 +597,8 @@ function FilterBar({
           )}
         </div>
       )}
+
+      <ContadoresEstado estado={estado} setEstado={setEstado} conteos={conteos} total={totalSinEstado} />
 
       {/* El buscador miraba solo procedure_interest, pero también busca dentro
           del motivo de escalación y del nombre. El texto ahora lo dice: nadie
@@ -833,9 +901,15 @@ function FollowupRow({ group, onUpdateStatus, error, miId }) {
             // plazo no compromete el cambio hasta que se elige un plazo.
             setEsperaAbierta(true);
           }}
+          // Al pasar el cursor por el selector explica el estado que tiene
+          // puesto; al desplegarlo, cada opción trae el suyo. Es el momento en
+          // que se decide y donde el texto hace falta.
+          title={ESTADO_AYUDA[conv.estado] || "Estado de seguimiento"}
           style={{ ...SELECT_STYLE, flexShrink: 0 }}
         >
-          {ESTADO_OPTIONS.map((v) => <option key={v} value={v}>{ESTADO_LABEL[v]}</option>)}
+          {ESTADO_OPTIONS.map((v) => (
+            <option key={v} value={v} title={ESTADO_AYUDA[v]}>{ESTADO_LABEL[v]}</option>
+          ))}
         </select>
 
         <ZenviaButton prospectId={conv.prospect_id} />
@@ -1393,15 +1467,22 @@ export function SeguimientoSection({ profile }) {
     [urgentesAbiertos]
   );
 
-  const filtered = useMemo(() => {
+  // Todo filtrado MENOS el estado. De acá salen los contadores: si el conteo de
+  // "Contactados" cambiara al filtrar por estado, los números no se podrían
+  // comparar entre sí y no servirían para ver el volumen del día.
+  const sinFiltroDeEstado = useMemo(() => {
     const q = normalize(search);
     return rawRows.filter((r) => {
       if (enLaFranja.has(r.id)) return false;
-      // "Mi lista" es el modo por defecto: solo lo asignado a esta persona.
-      if (modo === "mias" && r.asignado_a !== miId) return false;
+      // "Mi lista" son las conversaciones de esta persona: las que tiene
+      // asignadas, MÁS las que ya trabajó.
+      //
+      // Lo segundo hace falta porque la asignación se vence a los 3 días: sin
+      // esto, lo que contactó el jueves desaparecía de su lista el domingo y el
+      // contador de "Contactados" mostraba menos trabajo del que realmente hizo.
+      if (modo === "mias" && r.asignado_a !== miId && r.actualizado_por !== actor) return false;
       if (origen !== "todos" && r.origen !== origen) return false;
       if (categoria !== "todos" && r.categoria !== categoria) return false;
-      if (estado !== "todos" && r.estado !== estado) return false;
       if (canal !== "todos" && r.channel !== canal) return false;
       if (!matchesProcedure(r.procedure_code, procedimiento)) return false;
       // El buscador miraba SOLO procedure_interest, que es una etiqueta de 2-4
@@ -1414,7 +1495,18 @@ export function SeguimientoSection({ profile }) {
             && !normalize(r.patient_name).includes(q)) return false;
       return true;
     });
-  }, [rawRows, enLaFranja, modo, miId, origen, categoria, estado, canal, procedimiento, search]);
+  }, [rawRows, enLaFranja, modo, miId, actor, origen, categoria, canal, procedimiento, search]);
+
+  const conteos = useMemo(() => {
+    const c = {};
+    sinFiltroDeEstado.forEach((r) => { c[r.estado] = (c[r.estado] || 0) + 1; });
+    return c;
+  }, [sinFiltroDeEstado]);
+
+  const filtered = useMemo(
+    () => (estado === "todos" ? sinFiltroDeEstado : sinFiltroDeEstado.filter((r) => r.estado === estado)),
+    [sinFiltroDeEstado, estado]
+  );
 
   const grouped = useMemo(() => groupByPhone(filtered), [filtered]);
   const totalPages = Math.max(1, Math.ceil(grouped.length / PAGE_SIZE));
@@ -1473,6 +1565,7 @@ export function SeguimientoSection({ profile }) {
         canal={canal} setCanal={setCanal}
         procedimiento={procedimiento} setProcedimiento={setProcedimiento}
         search={search} setSearch={setSearch}
+        conteos={conteos} totalSinEstado={sinFiltroDeEstado.length}
       />
 
       <div style={{ display: "flex", justifyContent: "flex-end", alignItems: "center", gap: 12, marginBottom: 12 }}>
