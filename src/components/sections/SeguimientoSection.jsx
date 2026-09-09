@@ -54,6 +54,27 @@ const ESTADO_LABEL = {
 };
 const ESTADO_OPTIONS = ["pendiente", "contactado", "agendo", "en_espera", "descartado", "no_contactable"];
 
+// Para qué sirve cada estado, en las palabras de quien va a elegirlo. Salen al
+// pasar el cursor por los contadores y por el selector de cada tarjeta.
+//
+// No es adorno: elegir mal el estado es lo que hace perder un lead. "Descartado"
+// y "No contactable" se parecen y significan cosas distintas, y "En espera" —el
+// que describe el desenlace más común— no se entiende por su nombre.
+const ESTADO_AYUDA = {
+  pendiente:
+    "Sin trabajar. Es el estado inicial de toda conversación que Sofía deja abierta.",
+  contactado:
+    "Ya hubo contacto con el paciente y la conversación sigue abierta, pero todavía sin cita.",
+  agendo:
+    "La valoración quedó agendada. La conversación sale de la cola y se registra como resultado.",
+  en_espera:
+    "El paciente quedó de responder, o no respondió. La conversación sale de pendientes y regresa automáticamente en la fecha que elija. Al regresar corresponde llamar, no escribir.",
+  descartado:
+    "Sin interés real o no califica. Sale de la cola de forma definitiva: úselo solo con certeza.",
+  no_contactable:
+    "El número es inválido o el paciente pidió no ser contactado. A diferencia de descartado, el impedimento es el canal y no el interés.",
+};
+
 // Cuánto esperar cuando el paciente dijo que él escribe. La conversación sale de
 // la lista activa y VUELVE SOLA pasada la fecha — lo calcula la vista al
 // consultar, no hay proceso que la despierte.
@@ -395,11 +416,61 @@ const dateInputStyle = {
   outline: "none", fontFamily: "'Manrope', sans-serif",
 };
 
+// Contadores por estado, como botones. Reemplazan el menú desplegable de
+// "Estado": el menú escondía el dato que un asesor quiere ver sin buscarlo —
+// cuánto lleva hecho hoy. Acá el volumen se lee de un vistazo y además filtra.
+//
+// Los números respetan todos los demás filtros MENOS el de estado, que es lo
+// que los hace comparables entre sí: si "Contactados (5)" cambiara al filtrar
+// por estado, no serviría para nada.
+function ContadoresEstado({ estado, setEstado, conteos, total }) {
+  const chip = (activo, resaltado) => ({
+    display: "inline-flex", alignItems: "baseline", gap: 6,
+    padding: "6px 13px", borderRadius: 999, fontSize: 13,
+    fontFamily: "'Manrope', sans-serif", cursor: "pointer", whiteSpace: "nowrap",
+    fontWeight: activo ? 700 : 600,
+    border: `1.5px solid ${activo ? COLORS.green : COLORS.border}`,
+    background: activo ? COLORS.green : "transparent",
+    color: activo ? "#fff" : (resaltado ? COLORS.text : COLORS.textMuted),
+  });
+
+  return (
+    <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+      <button
+        onClick={() => setEstado("todos")}
+        aria-pressed={estado === "todos"}
+        title="Todas las conversaciones, en cualquier estado."
+        style={chip(estado === "todos", true)}
+      >
+        Todos
+        <span style={{ fontVariantNumeric: "tabular-nums" }}>{total}</span>
+      </button>
+
+      {ESTADO_OPTIONS.map((v) => {
+        const n = conteos[v] || 0;
+        return (
+          <button
+            key={v}
+            onClick={() => setEstado(v)}
+            aria-pressed={estado === v}
+            title={ESTADO_AYUDA[v]}
+            style={chip(estado === v, n > 0)}
+          >
+            {ESTADO_LABEL[v]}
+            <span style={{ fontVariantNumeric: "tabular-nums" }}>{n}</span>
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
 function FilterBar({
   from, to, setFrom, setTo,
   origen, setOrigen, categoria, setCategoria, estado, setEstado, canal, setCanal,
   procedimiento, setProcedimiento,
   search, setSearch,
+  conteos, totalSinEstado,
 }) {
   const hoyActivo = from === todayISO() && to === todayISO();
 
@@ -464,12 +535,7 @@ function FilterBar({
           Hoy
         </button>
 
-        {/* Los dos que sí se usan todos los días. */}
-        <select value={estado} onChange={(e) => setEstado(e.target.value)} style={SELECT_STYLE}>
-          <option value="todos">Estado: todos</option>
-          {ESTADO_OPTIONS.map((v) => <option key={v} value={v}>{ESTADO_LABEL[v]}</option>)}
-        </select>
-
+        {/* El estado ya no es un menú: son los contadores de abajo. */}
         <FilterSelect value={procedimiento} onChange={setProcedimiento} options={PROCEDURE_OPTIONS} />
 
         <button
@@ -531,6 +597,8 @@ function FilterBar({
           )}
         </div>
       )}
+
+      <ContadoresEstado estado={estado} setEstado={setEstado} conteos={conteos} total={totalSinEstado} />
 
       {/* El buscador miraba solo procedure_interest, pero también busca dentro
           del motivo de escalación y del nombre. El texto ahora lo dice: nadie
@@ -760,7 +828,7 @@ function FollowupRow({ group, onUpdateStatus, error, miId }) {
                 padding: "2px 10px", borderRadius: 999, fontSize: 11, fontWeight: 800,
                 letterSpacing: 0.3, background: COLORS.danger, color: "#fff",
                 fontFamily: "'Manrope', sans-serif", whiteSpace: "nowrap",
-              }} title="Reclamo, complicación o paciente buscando otra clínica">
+              }} title="Reclamo, complicación o paciente que consulta en otra clínica">
                 <AlertTriangle size={11} strokeWidth={2.5} /> URGENTE
               </span>
             )}
@@ -833,9 +901,15 @@ function FollowupRow({ group, onUpdateStatus, error, miId }) {
             // plazo no compromete el cambio hasta que se elige un plazo.
             setEsperaAbierta(true);
           }}
+          // Al pasar el cursor por el selector explica el estado que tiene
+          // puesto; al desplegarlo, cada opción trae el suyo. Es el momento en
+          // que se decide y donde el texto hace falta.
+          title={ESTADO_AYUDA[conv.estado] || "Estado de seguimiento"}
           style={{ ...SELECT_STYLE, flexShrink: 0 }}
         >
-          {ESTADO_OPTIONS.map((v) => <option key={v} value={v}>{ESTADO_LABEL[v]}</option>)}
+          {ESTADO_OPTIONS.map((v) => (
+            <option key={v} value={v} title={ESTADO_AYUDA[v]}>{ESTADO_LABEL[v]}</option>
+          ))}
         </select>
 
         <ZenviaButton prospectId={conv.prospect_id} />
@@ -901,7 +975,7 @@ function FollowupRow({ group, onUpdateStatus, error, miId }) {
             Cancelar
           </button>
           <span style={{ fontSize: 12, color: COLORS.textMuted, fontFamily: "'Manrope', sans-serif", width: "100%" }}>
-            Sale de pendientes y vuelve sola en esa fecha. Al retomarla, el siguiente paso es una llamada.
+            Sale de pendientes y regresa automáticamente en esa fecha. Al regresar corresponde llamar, no escribir.
           </span>
         </div>
       )}
@@ -1018,7 +1092,7 @@ function CabeceraMiLista({
               cursor: tomando ? "not-allowed" : "pointer", textDecoration: "underline",
             }}
           >
-            Soltar los que no trabajé
+            Liberar los que no trabajé
           </button>
         )}
       </div>
@@ -1027,7 +1101,7 @@ function CabeceraMiLista({
         {enMiLista
           ? mios === 0
             ? `Su lista está vacía. Tome ${LISTA_DEL_DIA} leads del principio de la cola para empezar el día.`
-            : `${mios} ${mios === 1 ? "lead pendiente" : "leads pendientes"} a su nombre. Los que no trabaje vuelven a la cola en 3 días.`
+            : `${mios} ${mios === 1 ? "lead pendiente" : "leads pendientes"} a su nombre. Los que no trabaje regresan a la cola en 3 días.`
           : `${total.toLocaleString("es-CR")} conversaciones en la cola completa, de todos los asesores.`}
       </p>
 
@@ -1069,7 +1143,7 @@ function BandaUrgentes({ filas, onUpdateStatus, rowErrors, miId }) {
           {filas.length === 1 ? "1 caso urgente sin atender" : `${filas.length} casos urgentes sin atender`}
         </h3>
         <span style={{ fontSize: 12.5, color: COLORS.danger, fontFamily: "'Manrope', sans-serif", opacity: 0.85 }}>
-          Reclamos, complicaciones y pacientes buscando otra clínica. Van primero, sin importar el puntaje.
+          Reclamos, complicaciones y pacientes que consultan en otra clínica. Tienen prioridad sobre el puntaje.
         </span>
       </header>
 
@@ -1393,15 +1467,22 @@ export function SeguimientoSection({ profile }) {
     [urgentesAbiertos]
   );
 
-  const filtered = useMemo(() => {
+  // Todo filtrado MENOS el estado. De acá salen los contadores: si el conteo de
+  // "Contactados" cambiara al filtrar por estado, los números no se podrían
+  // comparar entre sí y no servirían para ver el volumen del día.
+  const sinFiltroDeEstado = useMemo(() => {
     const q = normalize(search);
     return rawRows.filter((r) => {
       if (enLaFranja.has(r.id)) return false;
-      // "Mi lista" es el modo por defecto: solo lo asignado a esta persona.
-      if (modo === "mias" && r.asignado_a !== miId) return false;
+      // "Mi lista" son las conversaciones de esta persona: las que tiene
+      // asignadas, MÁS las que ya trabajó.
+      //
+      // Lo segundo hace falta porque la asignación se vence a los 3 días: sin
+      // esto, lo que contactó el jueves desaparecía de su lista el domingo y el
+      // contador de "Contactados" mostraba menos trabajo del que realmente hizo.
+      if (modo === "mias" && r.asignado_a !== miId && r.actualizado_por !== actor) return false;
       if (origen !== "todos" && r.origen !== origen) return false;
       if (categoria !== "todos" && r.categoria !== categoria) return false;
-      if (estado !== "todos" && r.estado !== estado) return false;
       if (canal !== "todos" && r.channel !== canal) return false;
       if (!matchesProcedure(r.procedure_code, procedimiento)) return false;
       // El buscador miraba SOLO procedure_interest, que es una etiqueta de 2-4
@@ -1414,7 +1495,18 @@ export function SeguimientoSection({ profile }) {
             && !normalize(r.patient_name).includes(q)) return false;
       return true;
     });
-  }, [rawRows, enLaFranja, modo, miId, origen, categoria, estado, canal, procedimiento, search]);
+  }, [rawRows, enLaFranja, modo, miId, actor, origen, categoria, canal, procedimiento, search]);
+
+  const conteos = useMemo(() => {
+    const c = {};
+    sinFiltroDeEstado.forEach((r) => { c[r.estado] = (c[r.estado] || 0) + 1; });
+    return c;
+  }, [sinFiltroDeEstado]);
+
+  const filtered = useMemo(
+    () => (estado === "todos" ? sinFiltroDeEstado : sinFiltroDeEstado.filter((r) => r.estado === estado)),
+    [sinFiltroDeEstado, estado]
+  );
 
   const grouped = useMemo(() => groupByPhone(filtered), [filtered]);
   const totalPages = Math.max(1, Math.ceil(grouped.length / PAGE_SIZE));
@@ -1424,7 +1516,7 @@ export function SeguimientoSection({ profile }) {
     <div>
       <SectionHeader
         icon={<PhoneCall size={20} color={COLORS.gold} />}
-        subtitle="Conversaciones de Sofía que quedaron abiertas sin venta — escaladas sin cita y cerradas sin escalar, priorizadas por score."
+        subtitle="Conversaciones de Sofía que quedaron abiertas sin venta — escaladas sin cita y cerradas sin escalar, priorizadas por puntaje."
       />
 
       {/* Antes que los indicadores y que cualquier filtro: es lo primero que
@@ -1473,6 +1565,7 @@ export function SeguimientoSection({ profile }) {
         canal={canal} setCanal={setCanal}
         procedimiento={procedimiento} setProcedimiento={setProcedimiento}
         search={search} setSearch={setSearch}
+        conteos={conteos} totalSinEstado={sinFiltroDeEstado.length}
       />
 
       <div style={{ display: "flex", justifyContent: "flex-end", alignItems: "center", gap: 12, marginBottom: 12 }}>
