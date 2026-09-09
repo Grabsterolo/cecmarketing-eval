@@ -67,14 +67,18 @@ registrada creaba, así que recrear la base dejaba la sección Pacientes sin
 nombres y sin ningún error que lo explicara. Se arregló con
 `20260909015506_sofia_pacientes_al_dia.sql`.
 
-## `schema.sql` está desactualizado
+## `schema.sql`
 
-El `supabase/schema.sql` de la raíz **no incluye** ninguna de las migraciones de
-agosto ni de septiembre de 2026. Recrear la base desde ese archivo deja el
-dashboard roto: faltarían `procedure_code`, `sofia_pacientes`,
-`sofia_home_stats`, la asignación de la lista del día y más.
+`supabase/schema.sql` se regeneró el 2026-09-09 por introspección del estado
+real. Antes llevaba desactualizado desde julio: no tenía `procedure_code`, ni
+`sofia_pacientes`, ni `sofia_home_stats`, ni nada de Seguimiento, así que
+recrear desde ahí dejaba el dashboard roto.
 
-Para recrear la base, reproducir las migraciones en orden de versión.
+No se edita a mano: se regenera cuando el esquema cambie de forma importante.
+No incluye datos — una base recreada arranca vacía y con Sofía sin prompt.
+
+Para recrear la base sirven los dos caminos: ese archivo, o reproducir las
+migraciones en orden de versión.
 
 ## Al agregar una migración nueva
 
