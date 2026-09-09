@@ -402,22 +402,45 @@ function FilterBar({
   search, setSearch,
 }) {
   const hoyActivo = from === todayISO() && to === todayISO();
+
+  // Origen, categoría y canal se usan poco y llenaban la barra. Van detrás de
+  // "Más filtros", PERO nunca escondidos en silencio: si alguno está activo, el
+  // panel arranca abierto y el botón dice cuántos hay. Un filtro activo e
+  // invisible es una trampa — el asesor ve menos leads de los que espera y no
+  // tiene forma de saber por qué.
+  const avanzadosActivos =
+    (origen !== "todos" ? 1 : 0) + (categoria !== "todos" ? 1 : 0) + (canal !== "todos" ? 1 : 0);
+  const [masAbierto, setMasAbierto] = useState(avanzadosActivos > 0);
+
+  const rangoActivo = !hoyActivo;
+
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 12, marginBottom: 8 }}>
       <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
-        <label style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 13, color: COLORS.textMuted, fontFamily: "'Manrope', sans-serif" }}>
-          Desde
-          <input type="date" value={from} min={MIN_DATE} max={to} onChange={(e) => setFrom(clampToMinDate(e.target.value))} style={dateInputStyle} />
-        </label>
-        {/* Ver lo que entró hoy exigía mover dos selectores de fecha. Los leads
-            del día son justo los que todavía se pueden recuperar.
+        {/* Las dos mitades del rango, juntas. Antes el botón "Hoy" se metía
+            entre "Desde" y "Hasta", partiendo un mismo control en dos. */}
+        <div style={{
+          display: "flex", alignItems: "center", gap: 8,
+          border: `1.5px solid ${COLORS.border}`, borderRadius: 10,
+          padding: "4px 10px", background: COLORS.inputBg,
+        }}>
+          <input
+            type="date" value={from} min={MIN_DATE} max={to}
+            onChange={(e) => setFrom(clampToMinDate(e.target.value))}
+            aria-label="Desde"
+            style={{ ...dateInputStyle, border: "none", background: "transparent", padding: "4px 0" }}
+          />
+          <span style={{ color: COLORS.textMuted, fontSize: 13 }}>–</span>
+          <input
+            type="date" value={to} min={from} max={todayISO()}
+            onChange={(e) => setTo(e.target.value)}
+            aria-label="Hasta"
+            style={{ ...dateInputStyle, border: "none", background: "transparent", padding: "4px 0" }}
+          />
+        </div>
 
-            Es un INTERRUPTOR, no un atajo de ida. La primera versión solo hacía
-            setFrom/setTo a hoy: se pintaba de verde pero volver a tocarlo no
-            hacía nada, y para salir había que mover los dos selectores a mano —
-            exactamente lo que el botón venía a evitar. Al apagarlo vuelve al
-            rango por defecto (últimos 30 días), que es como arranca la
-            pantalla. */}
+        {/* Es un INTERRUPTOR, no un atajo de ida: al apagarlo vuelve al rango
+            por defecto (últimos 30 días), que es como arranca la pantalla. */}
         <button
           onClick={() => {
             if (hoyActivo) {
@@ -440,47 +463,81 @@ function FilterBar({
         >
           Hoy
         </button>
-        {/* Acá vivía el botón "⚠ Urgentes (N)". Lo reemplaza la franja fija de
-            arriba, que muestra los urgentes abiertos siempre, sin depender del
-            rango de fechas ni de que alguien se acuerde de pulsarlo — que era
-            justamente el problema: un caso de riesgo no puede estar detrás de
-            un filtro opcional. */}
-        <label style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 13, color: COLORS.textMuted, fontFamily: "'Manrope', sans-serif" }}>
-          Hasta
-          <input type="date" value={to} min={from} max={todayISO()} onChange={(e) => setTo(e.target.value)} style={dateInputStyle} />
-        </label>
 
-        <select value={origen} onChange={(e) => setOrigen(e.target.value)} style={SELECT_STYLE}>
-          <option value="todos">Origen: todos</option>
-          <option value="escalada_sin_cita">Escalada sin cita</option>
-          <option value="escalada_otro_motivo">Escalada por otro motivo</option>
-          <option value="escalada_tecnica">Escalada técnica</option>
-          <option value="cerrada_sin_escalar">Cerrada sin escalar</option>
-        </select>
-
-        <select value={categoria} onChange={(e) => setCategoria(e.target.value)} style={SELECT_STYLE}>
-          <option value="todos">Categoría: todas</option>
-          <option value="cirugia">Cirugía</option>
-          <option value="tratamiento_no_quirurgico">No quirúrgico</option>
-        </select>
-
+        {/* Los dos que sí se usan todos los días. */}
         <select value={estado} onChange={(e) => setEstado(e.target.value)} style={SELECT_STYLE}>
           <option value="todos">Estado: todos</option>
           {ESTADO_OPTIONS.map((v) => <option key={v} value={v}>{ESTADO_LABEL[v]}</option>)}
         </select>
 
-        <select value={canal} onChange={(e) => setCanal(e.target.value)} style={SELECT_STYLE}>
-          <option value="todos">Canal: todos</option>
-          <option value="whatsapp">WhatsApp</option>
-          <option value="facebook">Facebook</option>
-        </select>
-
         <FilterSelect value={procedimiento} onChange={setProcedimiento} options={PROCEDURE_OPTIONS} />
+
+        <button
+          onClick={() => setMasAbierto((v) => !v)}
+          aria-expanded={masAbierto}
+          style={{
+            display: "inline-flex", alignItems: "center", gap: 6,
+            padding: "6px 12px", borderRadius: 8, fontSize: 13, fontWeight: 600,
+            fontFamily: "'Manrope', sans-serif", cursor: "pointer",
+            border: `1.5px solid ${avanzadosActivos > 0 ? COLORS.green : COLORS.border}`,
+            background: "transparent",
+            color: avanzadosActivos > 0 ? COLORS.green : COLORS.textMuted,
+          }}
+        >
+          Más filtros{avanzadosActivos > 0 && ` (${avanzadosActivos})`}
+          <ChevronDown size={14} style={{ transition: "transform 0.2s", transform: masAbierto ? "rotate(180deg)" : "none" }} />
+        </button>
+
+        {rangoActivo && (
+          <span style={{ fontSize: 12, color: COLORS.textMuted, fontFamily: "'Manrope', sans-serif" }}>
+            {from === to ? "1 día" : "del " + from + " al " + to}
+          </span>
+        )}
       </div>
 
+      {masAbierto && (
+        <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
+          <select value={origen} onChange={(e) => setOrigen(e.target.value)} style={SELECT_STYLE}>
+            <option value="todos">Origen: todos</option>
+            <option value="escalada_sin_cita">Escalada sin cita</option>
+            <option value="escalada_otro_motivo">Escalada por otro motivo</option>
+            <option value="escalada_tecnica">Escalada técnica</option>
+            <option value="cerrada_sin_escalar">Cerrada sin escalar</option>
+          </select>
+
+          <select value={categoria} onChange={(e) => setCategoria(e.target.value)} style={SELECT_STYLE}>
+            <option value="todos">Categoría: todas</option>
+            <option value="cirugia">Cirugía</option>
+            <option value="tratamiento_no_quirurgico">No quirúrgico</option>
+          </select>
+
+          <select value={canal} onChange={(e) => setCanal(e.target.value)} style={SELECT_STYLE}>
+            <option value="todos">Canal: todos</option>
+            <option value="whatsapp">WhatsApp</option>
+            <option value="facebook">Facebook</option>
+          </select>
+
+          {avanzadosActivos > 0 && (
+            <button
+              onClick={() => { setOrigen("todos"); setCategoria("todos"); setCanal("todos"); }}
+              style={{
+                background: "none", border: "none", padding: "6px 4px",
+                fontSize: 12.5, color: COLORS.textMuted, fontFamily: "'Manrope', sans-serif",
+                cursor: "pointer", textDecoration: "underline",
+              }}
+            >
+              Quitar estos filtros
+            </button>
+          )}
+        </div>
+      )}
+
+      {/* El buscador miraba solo procedure_interest, pero también busca dentro
+          del motivo de escalación y del nombre. El texto ahora lo dice: nadie
+          iba a buscar "director" en un campo que prometía solo procedimientos. */}
       <input
         type="text"
-        placeholder="Buscar por procedimiento..."
+        placeholder="Buscar por nombre, procedimiento o motivo..."
         value={search}
         onChange={(e) => setSearch(e.target.value)}
         style={{ ...dateInputStyle, width: "100%", maxWidth: 360 }}
@@ -710,9 +767,13 @@ function FollowupRow({ group, onUpdateStatus, error, miId }) {
             <Badge variant={conv.categoria === "cirugia" ? "gold" : "default"}>
               {CATEGORIA_LABEL[conv.categoria] || conv.categoria}
             </Badge>
-            <Badge>{ORIGEN_LABEL[conv.origen] || conv.origen}</Badge>
-            <Badge>{conv.channel === "facebook" ? "Facebook" : "WhatsApp"}</Badge>
-            {group.count > 1 && <Badge variant="gold">{group.count} conversaciones</Badge>}
+            {/* El canal solo se muestra cuando NO es WhatsApp. Medido el
+                2026-09-09: 3.788 de 4.293 conversaciones entran por WhatsApp,
+                o sea que la etiqueta repetía lo obvio en el 88% de las
+                tarjetas. Lo que informa es la excepción. */}
+            {conv.channel && conv.channel !== "whatsapp" && (
+              <Badge>{conv.channel === "facebook" ? "Facebook" : conv.channel}</Badge>
+            )}
             {/* Quién lo tiene en su lista. Solo se muestra si es de OTRA
                 persona: en "Mi lista" son todos míos y repetir "Mío" en las 30
                 tarjetas sería ruido. En la cola completa, en cambio, es lo que
@@ -726,8 +787,12 @@ function FollowupRow({ group, onUpdateStatus, error, miId }) {
               </span>
             )}
           </div>
-          <p style={{ margin: 0, fontSize: 12, color: COLORS.textMuted, fontFamily: "'Manrope', sans-serif" }}>
-            {conv.message_count || 0} mensajes · {formatRelative(conv.created_at)} · {formatFullDate(conv.created_at)}
+          {/* Antes decía la fecha dos veces seguidas: "hace 3d · 5 sep, 3:24
+              p. m.". Queda la relativa, que es la que se lee de un vistazo, y
+              la exacta aparece al pasar el cursor. */}
+          <p style={{ margin: 0, fontSize: 12, color: COLORS.textMuted, fontFamily: "'Manrope', sans-serif" }}
+             title={`Entró el ${formatFullDate(conv.created_at)}`}>
+            {conv.message_count || 0} mensajes · {formatRelative(conv.created_at)}
           </p>
 
           {/* Quién tocó este lead y cuándo — a la vista en la tarjeta, no
@@ -852,6 +917,39 @@ function FollowupRow({ group, onUpdateStatus, error, miId }) {
           {/* El "por quién / cuándo" ya no vive acá: subió a la tarjeta, donde
               se ve sin tener que abrir la nota (era el punto ciego que dejaba
               repetir llamadas). */}
+          {/* Origen y número de conversaciones bajaron acá desde la tarjeta.
+              Arriba competían por la atención con el nombre y la urgencia sin
+              cambiar lo que el asesor hace a continuación; abiertos, en cambio,
+              son contexto útil antes de llamar. */}
+          <div style={{ display: "flex", gap: 20, flexWrap: "wrap", marginBottom: 16 }}>
+            <div>
+              <p style={{ margin: "0 0 2px", fontSize: 11, color: COLORS.textMuted, fontFamily: "'Manrope', sans-serif" }}>
+                Origen
+              </p>
+              <p style={{ margin: 0, fontSize: 13, fontWeight: 600, color: COLORS.text, fontFamily: "'Manrope', sans-serif" }}>
+                {ORIGEN_LABEL[conv.origen] || conv.origen}
+              </p>
+            </div>
+            {group.count > 1 && (
+              <div>
+                <p style={{ margin: "0 0 2px", fontSize: 11, color: COLORS.textMuted, fontFamily: "'Manrope', sans-serif" }}>
+                  Conversaciones
+                </p>
+                <p style={{ margin: 0, fontSize: 13, fontWeight: 600, color: COLORS.text, fontFamily: "'Manrope', sans-serif" }}>
+                  {group.count} de esta misma persona
+                </p>
+              </div>
+            )}
+            <div>
+              <p style={{ margin: "0 0 2px", fontSize: 11, color: COLORS.textMuted, fontFamily: "'Manrope', sans-serif" }}>
+                Primer contacto
+              </p>
+              <p style={{ margin: 0, fontSize: 13, fontWeight: 600, color: COLORS.text, fontFamily: "'Manrope', sans-serif" }}>
+                {formatFullDate(conv.created_at)}
+              </p>
+            </div>
+          </div>
+
           <DesgloseScore conv={conv} />
           <NotaEditor conversationId={conv.id} initialNota={conv.nota} onSave={onUpdateStatus} />
         </div>
