@@ -1,3 +1,17 @@
+-- ⚠ APLICADO SUELTO, FUERA DEL SISTEMA DE MIGRACIONES
+--
+-- Este cambio SÍ está en producción, pero se aplicó con un execute_sql directo
+-- y nunca quedó registrado en el historial de Supabase. Por eso su nombre de
+-- archivo no corresponde a ninguna versión aplicada: es documentación, no un
+-- paso reproducible.
+--
+-- No hay nada que hacer al respecto: la definición vigente de la vista quedó
+-- capturada entera en 20260909012621_seguimiento_lista_del_dia.sql, así que
+-- reproducir el historial en orden da el resultado correcto. Este archivo se
+-- conserva por lo que explica, no por lo que ejecuta.
+--
+-- Detectado y anotado el 2026-09-09.
+
 -- El nombre del paciente llega a la cola de Seguimiento.
 --
 -- patient_name se agregó a sofia_conversations en la migración anterior, pero el
