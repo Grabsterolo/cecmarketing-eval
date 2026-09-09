@@ -1,10 +1,9 @@
 import React from "react";
 import { COLORS } from "../../constants/colors.js";
 
-// Estilo de los <select> de filtro. Vivía duplicado, idéntico, en
-// LeadsCalientesSection y SeguimientoSection, más una tercera copia en línea
-// en SofiaMetricsSection — tres definiciones que había que mantener a mano
-// para que los filtros de las tres secciones se vieran igual.
+// Estilo de los <select> de filtro. Vivía duplicado, idéntico, en varias
+// secciones — definiciones sueltas que había que mantener a mano para que los
+// filtros de todas se vieran igual.
 export const SELECT_STYLE = {
   background: COLORS.inputBg, border: `1.5px solid ${COLORS.border}`,
   borderRadius: 8, padding: "8px 12px", color: COLORS.text, fontSize: 13,

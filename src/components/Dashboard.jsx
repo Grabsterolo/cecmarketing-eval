@@ -8,7 +8,6 @@ import { DashboardHome } from "./sections/DashboardHome.jsx";
 import { MetricsSection } from "./sections/MetricsSection.jsx";
 import { SofiaMetricsSection } from "./sections/SofiaMetricsSection.jsx";
 import { RecommendationsSection } from "./sections/RecommendationsSection.jsx";
-import { LeadsCalientesSection } from "./sections/LeadsCalientesSection.jsx";
 import { SofiaAuditSection } from "./sections/SofiaAuditSection.jsx";
 import { ConfigureSofiaSection } from "./sections/ConfigureSofiaSection.jsx";
 import { TestSofiaSection } from "./sections/TestSofiaSection.jsx";
@@ -22,7 +21,6 @@ const SECTION_TITLES = {
   metricas: "Métricas Meta",
   "metricas-sofia": "Métricas Sofía",
   recomendaciones: "Recomendaciones",
-  "leads-calientes": "Leads Potenciales",
   "auditoria-sofia": "Auditoría de Sofía",
   "configurar-sofia": "Configurar a Sofía",
   "probar-sofia": "Probar a Sofía",
@@ -81,7 +79,6 @@ export function Dashboard({ onLogout, profile }) {
       case "metricas": return <MetricsSection />;
       case "metricas-sofia": return <SofiaMetricsSection setActive={navigate} />;
       case "recomendaciones": return <RecommendationsSection />;
-      case "leads-calientes": return <LeadsCalientesSection />;
       case "auditoria-sofia": return <SofiaAuditSection />;
       case "configurar-sofia": return <ConfigureSofiaSection />;
       case "probar-sofia": return <TestSofiaSection />;

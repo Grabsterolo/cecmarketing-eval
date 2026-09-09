@@ -13,7 +13,7 @@ import { useIsMobile } from "../../hooks/useIsMobile.js";
 import { supabase } from "../../lib/supabase.js";
 
 // prospect_id (y por lo tanto sofia_followup_queue) solo existe desde acá —
-// mismo punto de partida que Leads Potenciales y Métricas Sofía.
+// mismo punto de partida que Métricas Sofía.
 const MIN_DATE = "2026-08-06";
 const PAGE_SIZE = 25;
 
@@ -67,7 +67,7 @@ function normalize(str) {
 }
 
 // created_at se guarda en UTC pero el equipo opera en hora de Costa Rica —
-// mismo patrón que LeadsCalientesSection y SofiaMetricsSection.
+// mismo patrón que SofiaMetricsSection.
 function crDateStr(date) {
   return date.toLocaleDateString("en-CA", { timeZone: "America/Costa_Rica" });
 }
@@ -124,6 +124,122 @@ const TIER_STYLES = {
   medio: { bg: "rgba(201,162,78,0.14)", fg: COLORS.gold },
   bajo: { bg: "rgba(31,74,64,0.08)", fg: COLORS.textMuted },
 };
+
+// --- Desglose del puntaje -------------------------------------------------
+//
+// Rescatado de Leads Potenciales, que era la única pantalla que explicaba su
+// número. Explicaba OTRO número: lo calculaba en el navegador con una fórmula
+// distinta a la de la vista, y el 31% de los leads cambiaba de tramo
+// (alto/medio/bajo) según en qué pantalla se mirara. Acá los tramos son los de
+// sofia_followup_queue, así que las partes suman exactamente el puntaje que
+// muestra la tarjeta.
+//
+// La red de seguridad está en desgloseScore(): si las partes no suman el score
+// que mandó el servidor, no se pinta nada. Preferimos no explicar el puntaje a
+// explicarlo mal — un desglose que no cuadra con el número de al lado destruye
+// la confianza en los dos. Eso pasa si alguien cambia los tramos de la vista y
+// no toca este archivo, o si una fila cruza un corte de antigüedad con la
+// pantalla abierta (la vista usa el now() de la consulta; acá es Date.now()).
+const APARATOLOGIA = /(ultherapy|quantum|trilipo|radiesse|hialur|toxina|botox|co2|criolipo|bodytite)/i;
+
+function puntosProcedimiento(conv) {
+  if (conv.categoria === "cirugia") return { pts: 35, detalle: "Cirugía" };
+  if (APARATOLOGIA.test(`${conv.procedure_interest || ""} ${conv.escalation_reason || ""}`)) {
+    return { pts: 22, detalle: "Tratamiento de aparatología" };
+  }
+  if (conv.procedure_interest) return { pts: 12, detalle: "Otro tratamiento" };
+  return { pts: 0, detalle: "Sin procedimiento identificado" };
+}
+
+function puntosMensajes(count) {
+  const n = count || 0;
+  const texto = `${n} ${n === 1 ? "mensaje" : "mensajes"}`;
+  if (n >= 6) return { pts: 25, detalle: `${texto} — conversación larga` };
+  if (n >= 4) return { pts: 20, detalle: texto };
+  if (n === 3) return { pts: 14, detalle: texto };
+  if (n === 2) return { pts: 8, detalle: texto };
+  return { pts: 0, detalle: `${texto} — poco intercambio` };
+}
+
+// Se compara el valor crudo, sin normalizar, porque la vista hace lo mismo
+// (sentiment = 'positivo'). Cualquier otra cosa —negativo, null— vale 3.
+function puntosSentimiento(sentiment) {
+  if (sentiment === "positivo") return { pts: 15, detalle: "Positivo" };
+  if (sentiment === "neutral") return { pts: 8, detalle: "Neutral" };
+  return { pts: 3, detalle: sentiment === "negativo" ? "Negativo" : "Sin clasificar" };
+}
+
+function puntosAntiguedad(createdAt) {
+  const dias = (Date.now() - new Date(createdAt).getTime()) / 86400000;
+  const detalle = formatRelative(createdAt);
+  if (dias <= 2) return { pts: 15, detalle };
+  if (dias <= 5) return { pts: 11, detalle };
+  if (dias <= 10) return { pts: 7, detalle };
+  if (dias <= 20) return { pts: 3, detalle };
+  return { pts: 0, detalle };
+}
+
+function puntosIntencion(origen) {
+  if (origen === "escalada_sin_cita") return { pts: 10, detalle: "Pidió precio, cita o valoración" };
+  if (origen === "escalada_otro_motivo") return { pts: 8, detalle: "Escalación clínica" };
+  if (origen === "escalada_tecnica") return { pts: 0, detalle: "La escaló el sistema, no el paciente" };
+  return { pts: 0, detalle: "No escaló" };
+}
+
+function desgloseScore(conv) {
+  const partes = [
+    { etiqueta: "Procedimiento", ...puntosProcedimiento(conv) },
+    { etiqueta: "Interacción", ...puntosMensajes(conv.message_count) },
+    { etiqueta: "Sentimiento", ...puntosSentimiento(conv.sentiment) },
+    { etiqueta: "Antigüedad", ...puntosAntiguedad(conv.created_at) },
+    { etiqueta: "Intención", ...puntosIntencion(conv.origen) },
+  ];
+  return partes.reduce((t, p) => t + p.pts, 0) === conv.score ? partes : null;
+}
+
+function DesgloseScore({ conv }) {
+  const partes = desgloseScore(conv);
+  if (!partes) return null;
+
+  return (
+    <div style={{ marginBottom: 16 }}>
+      <p style={{
+        margin: "0 0 8px", fontSize: 11, fontWeight: 700, letterSpacing: "0.06em",
+        textTransform: "uppercase", color: COLORS.textMuted, fontFamily: "'Manrope', sans-serif",
+      }}>
+        Por qué este puntaje
+      </p>
+      {partes.map((p) => (
+        <div key={p.etiqueta} style={{
+          display: "flex", alignItems: "baseline", gap: 12, padding: "4px 0",
+          fontFamily: "'Manrope', sans-serif",
+        }}>
+          <span style={{ fontSize: 12, color: COLORS.textMuted, width: 104, flexShrink: 0 }}>
+            {p.etiqueta}
+          </span>
+          <span style={{ fontSize: 13, color: COLORS.text, flex: 1, minWidth: 0 }}>
+            {p.detalle}
+          </span>
+          <span style={{
+            fontSize: 13, fontWeight: 700, fontVariantNumeric: "tabular-nums",
+            color: p.pts > 0 ? COLORS.green : COLORS.textMuted, flexShrink: 0,
+          }}>
+            {p.pts > 0 ? `+${p.pts}` : "0"}
+          </span>
+        </div>
+      ))}
+      <div style={{
+        display: "flex", alignItems: "baseline", gap: 12, paddingTop: 8, marginTop: 4,
+        borderTop: `1px solid ${COLORS.border}`, fontFamily: "'Manrope', sans-serif",
+      }}>
+        <span style={{ fontSize: 12, fontWeight: 700, color: COLORS.text, flex: 1 }}>Total</span>
+        <span style={{ fontSize: 13, fontWeight: 800, color: COLORS.green, fontVariantNumeric: "tabular-nums" }}>
+          {conv.score}
+        </span>
+      </div>
+    </div>
+  );
+}
 
 // Colores del sello "Contactado por Ana · hace 5min" que va en cada tarjeta.
 // Van por estado para que se lea de un vistazo cuál ya está trabajado.
@@ -656,7 +772,7 @@ function FollowupRow({ group, onUpdateStatus, error }) {
 
         <button
           onClick={() => setNotaOpen((v) => !v)}
-          title="Nota de seguimiento"
+          title="Ver el desglose del puntaje y la nota de seguimiento"
           style={{
             display: "flex", alignItems: "center", justifyContent: "center",
             width: 32, height: 32, flexShrink: 0, borderRadius: 8,
@@ -679,6 +795,7 @@ function FollowupRow({ group, onUpdateStatus, error }) {
           {/* El "por quién / cuándo" ya no vive acá: subió a la tarjeta, donde
               se ve sin tener que abrir la nota (era el punto ciego que dejaba
               repetir llamadas). */}
+          <DesgloseScore conv={conv} />
           <NotaEditor conversationId={conv.id} initialNota={conv.nota} onSave={onUpdateStatus} />
         </div>
       )}
