@@ -28,7 +28,12 @@ const FETCH_PAGE_SIZE = 1000;
 // la vista (migración 20260902231711) — cuándo alguien del equipo tocó el
 // estado, NO cuándo se actualizó la conversación. Se usa para el "por X · hace
 // Nmin" de cada tarjeta.
-const QUEUE_COLUMNS = "id, phone_number, phone_hash, procedure_interest, procedure_code, escalation_reason, channel, message_count, sentiment, created_at, prospect_id, origen, categoria, score, estado, nota, actualizado_por, estado_actualizado_en, urgente, esperar_hasta, patient_name";
+const QUEUE_COLUMNS = "id, phone_number, phone_hash, procedure_interest, procedure_code, escalation_reason, channel, message_count, sentiment, created_at, prospect_id, origen, categoria, score, estado, nota, actualizado_por, estado_actualizado_en, urgente, esperar_hasta, patient_name, asignado_a, asignado_nombre";
+
+// Cuántos leads lleva un asesor en su lista del día. La vista los reparte de
+// arriba de la cola priorizada; la asignación se vence sola a los 3 días
+// (migración 20260909010000).
+const LISTA_DEL_DIA = 30;
 
 // "Escalada por otro motivo" son escalaciones clínicas reales (contraindicación,
 // lactancia, pérdida de peso en curso) que hasta el 2026-09-07 no llegaban acá:
@@ -658,7 +663,7 @@ function NotaEditor({ conversationId, initialNota, onSave }) {
   );
 }
 
-function FollowupRow({ group, onUpdateStatus, error }) {
+function FollowupRow({ group, onUpdateStatus, error, miId }) {
   const [notaOpen, setNotaOpen] = useState(false);
   const [esperaAbierta, setEsperaAbierta] = useState(false);
   const conv = group.latest;
@@ -708,6 +713,13 @@ function FollowupRow({ group, onUpdateStatus, error }) {
             <Badge>{ORIGEN_LABEL[conv.origen] || conv.origen}</Badge>
             <Badge>{conv.channel === "facebook" ? "Facebook" : "WhatsApp"}</Badge>
             {group.count > 1 && <Badge variant="gold">{group.count} conversaciones</Badge>}
+            {/* Quién lo tiene en su lista. Solo se muestra si es de OTRA
+                persona: en "Mi lista" son todos míos y repetir "Mío" en las 30
+                tarjetas sería ruido. En la cola completa, en cambio, es lo que
+                evita que alguien trabaje un lead que ya tiene dueño. */}
+            {conv.asignado_a && conv.asignado_a !== miId && conv.asignado_nombre && (
+              <Badge>En la lista de {conv.asignado_nombre}</Badge>
+            )}
             {sentimentInfo && (
               <span title={sentimentInfo.label} style={{ display: "flex", alignItems: "center" }}>
                 <sentimentInfo.Icon size={14} color={sentimentInfo.color} />
@@ -848,6 +860,88 @@ function FollowupRow({ group, onUpdateStatus, error }) {
   );
 }
 
+// Cabecera de la lista del día. Es el cambio de fondo de esta pantalla: antes
+// abría con 2.946 pendientes en 118 páginas, la misma lista para todos, y nadie
+// sabía qué le tocaba. Ahora cada asesor trabaja sus 30.
+//
+// El interruptor deja ver la cola completa igual — hace falta para buscar un
+// paciente concreto o revisar lo de otro — pero deja de ser lo primero que se
+// ve al entrar.
+function CabeceraMiLista({
+  modo, setModo, mios, total, tomando, onTomar, onSoltar, error,
+}) {
+  const enMiLista = modo === "mias";
+  const faltan = LISTA_DEL_DIA - mios;
+
+  const tab = (activo) => ({
+    padding: "7px 16px", borderRadius: 999, fontSize: 13.5, fontWeight: 700,
+    fontFamily: "'Manrope', sans-serif", cursor: "pointer",
+    border: `1.5px solid ${activo ? COLORS.green : COLORS.border}`,
+    background: activo ? COLORS.green : "transparent",
+    color: activo ? "#fff" : COLORS.text,
+  });
+
+  return (
+    <div style={{ marginBottom: 20 }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
+        <button onClick={() => setModo("mias")} aria-pressed={enMiLista} style={tab(enMiLista)}>
+          Mi lista {mios > 0 && `(${mios})`}
+        </button>
+        <button onClick={() => setModo("todas")} aria-pressed={!enMiLista} style={tab(!enMiLista)}>
+          Toda la cola
+        </button>
+
+        {enMiLista && faltan > 0 && (
+          <button
+            onClick={onTomar}
+            disabled={tomando}
+            style={{
+              background: COLORS.gold, color: "#fff", border: "none", borderRadius: 8,
+              padding: "8px 16px", fontSize: 13, fontWeight: 700,
+              fontFamily: "'Manrope', sans-serif",
+              cursor: tomando ? "not-allowed" : "pointer", opacity: tomando ? 0.6 : 1,
+            }}
+          >
+            {tomando
+              ? "Tomando..."
+              : mios === 0
+                ? `Tomar mis ${LISTA_DEL_DIA} leads`
+                : `Completar mi lista (+${faltan})`}
+          </button>
+        )}
+
+        {enMiLista && mios > 0 && (
+          <button
+            onClick={onSoltar}
+            disabled={tomando}
+            style={{
+              background: "none", border: "none", padding: "8px 4px",
+              fontSize: 12.5, color: COLORS.textMuted, fontFamily: "'Manrope', sans-serif",
+              cursor: tomando ? "not-allowed" : "pointer", textDecoration: "underline",
+            }}
+          >
+            Soltar los que no trabajé
+          </button>
+        )}
+      </div>
+
+      <p style={{ margin: "10px 0 0", fontSize: 12.5, color: COLORS.textMuted, fontFamily: "'Manrope', sans-serif" }}>
+        {enMiLista
+          ? mios === 0
+            ? `Su lista está vacía. Tome ${LISTA_DEL_DIA} leads del principio de la cola para empezar el día.`
+            : `${mios} ${mios === 1 ? "lead pendiente" : "leads pendientes"} a su nombre. Los que no trabaje vuelven a la cola en 3 días.`
+          : `${total.toLocaleString("es-CR")} conversaciones en la cola completa, de todos los asesores.`}
+      </p>
+
+      {error && (
+        <p style={{ margin: "8px 0 0", fontSize: 12.5, color: COLORS.danger, fontFamily: "'Manrope', sans-serif" }}>
+          {error}
+        </p>
+      )}
+    </div>
+  );
+}
+
 // Franja fija de urgentes. Va arriba de todo y no responde a ningún filtro ni
 // al rango de fechas: son reclamos, complicaciones post-operatorias y pacientes
 // que están buscando otra clínica. El score los enterraba porque mide valor
@@ -857,7 +951,7 @@ function FollowupRow({ group, onUpdateStatus, error }) {
 // Las tarjetas son las mismas de la lista, a propósito: se puede cambiar el
 // estado, abrir Zenvia y dejar nota sin bajar. Al marcarlas con cualquier
 // estado distinto de "pendiente" salen solas de la franja.
-function BandaUrgentes({ filas, onUpdateStatus, rowErrors }) {
+function BandaUrgentes({ filas, onUpdateStatus, rowErrors, miId }) {
   if (filas.length === 0) return null;
 
   return (
@@ -887,6 +981,7 @@ function BandaUrgentes({ filas, onUpdateStatus, rowErrors }) {
           group={{ key: row.id, latest: row, count: 1, maxScore: row.score, urgente: true }}
           onUpdateStatus={onUpdateStatus}
           error={rowErrors[row.id]}
+          miId={miId}
         />
       ))}
 
@@ -903,6 +998,9 @@ function BandaUrgentes({ filas, onUpdateStatus, rowErrors }) {
 export function SeguimientoSection({ profile }) {
   const isMobile = useIsMobile();
   const actor = profile?.full_name || "Equipo comercial";
+  // El id, no el nombre: hay dos perfiles llamados "Juan Pablo Gamboa", así que
+  // comparar por texto le mostraría a uno la lista del otro.
+  const miId = profile?.id || null;
 
   const [from, setFrom] = useState(clampToMinDate(daysAgoISO(30)));
   const [to, setTo] = useState(todayISO());
@@ -914,6 +1012,12 @@ export function SeguimientoSection({ profile }) {
   const [procedimiento, setProcedimiento] = useState("todos");
   const [search, setSearch] = useState("");
   const [page, setPage] = useState(1);
+
+  // "mias" | "todas". Arranca en la lista del día: es lo que un asesor viene a
+  // hacer. La cola completa sigue a un clic para buscar un paciente concreto.
+  const [modo, setModo] = useState("mias");
+  const [tomando, setTomando] = useState(false);
+  const [errorLista, setErrorLista] = useState(null);
 
   // Los urgentes viven aparte de rawRows porque no comparten alcance: la lista
   // respeta el rango de fechas y los filtros, la franja no.
@@ -1035,9 +1139,36 @@ export function SeguimientoSection({ profile }) {
     return () => { cancelled = true; };
   }, [reloadKey]);
 
+  // Pide la lista del día. La función de Postgres decide todo a partir de
+  // auth.uid(): no se le manda a quién asignar, así que nadie puede llenarle
+  // la lista a otro. Devuelve cuántos agregó — 0 si ya estaba llena, o si otro
+  // asesor se llevó los candidatos entre que se leyó la cola y se escribió.
+  const tomarMiLista = useCallback(async () => {
+    setTomando(true);
+    setErrorLista(null);
+    const { data, error: rpcError } = await supabase.rpc("asignar_mi_lista", { p_limite: LISTA_DEL_DIA });
+    if (rpcError) {
+      setErrorLista(`No se pudo tomar la lista: ${rpcError.message}`);
+    } else if (data === 0) {
+      setErrorLista("No quedan leads sin asignar en la cola. Los demás asesores ya los tienen.");
+    } else {
+      setReloadKey((k) => k + 1);
+    }
+    setTomando(false);
+  }, []);
+
+  const soltarMiLista = useCallback(async () => {
+    setTomando(true);
+    setErrorLista(null);
+    const { error: rpcError } = await supabase.rpc("soltar_mi_lista");
+    if (rpcError) setErrorLista(`No se pudo soltar la lista: ${rpcError.message}`);
+    else setReloadKey((k) => k + 1);
+    setTomando(false);
+  }, []);
+
   // Cambiar cualquier filtro vuelve a la página 1 — si no, se puede quedar
   // viendo una página que ya no existe con el filtro nuevo.
-  useEffect(() => { setPage(1); }, [from, to, origen, categoria, estado, canal, procedimiento, search]);
+  useEffect(() => { setPage(1); }, [from, to, modo, origen, categoria, estado, canal, procedimiento, search]);
 
   // Aplica a la lista en memoria un cambio hecho por OTRA persona (o por uno
   // mismo en otra pestaña) que llegó por realtime.
@@ -1149,6 +1280,13 @@ export function SeguimientoSection({ profile }) {
     [urgentes]
   );
 
+  // Cuántos leads tiene el asesor pendientes a su nombre. Se cuenta sobre el
+  // rango cargado, que es de dónde sale la lista que va a trabajar.
+  const misPendientes = useMemo(
+    () => rawRows.filter((r) => r.asignado_a === miId && r.estado === "pendiente").length,
+    [rawRows, miId]
+  );
+
   // Los que ya están en la franja no se repiten abajo: verlos dos veces en la
   // misma pantalla se lee como un error del sistema, y además invita a que dos
   // personas trabajen la misma tarjeta creyendo que son casos distintos.
@@ -1161,6 +1299,8 @@ export function SeguimientoSection({ profile }) {
     const q = normalize(search);
     return rawRows.filter((r) => {
       if (enLaFranja.has(r.id)) return false;
+      // "Mi lista" es el modo por defecto: solo lo asignado a esta persona.
+      if (modo === "mias" && r.asignado_a !== miId) return false;
       if (origen !== "todos" && r.origen !== origen) return false;
       if (categoria !== "todos" && r.categoria !== categoria) return false;
       if (estado !== "todos" && r.estado !== estado) return false;
@@ -1176,7 +1316,7 @@ export function SeguimientoSection({ profile }) {
             && !normalize(r.patient_name).includes(q)) return false;
       return true;
     });
-  }, [rawRows, enLaFranja, origen, categoria, estado, canal, procedimiento, search]);
+  }, [rawRows, enLaFranja, modo, miId, origen, categoria, estado, canal, procedimiento, search]);
 
   const grouped = useMemo(() => groupByPhone(filtered), [filtered]);
   const totalPages = Math.max(1, Math.ceil(grouped.length / PAGE_SIZE));
@@ -1191,10 +1331,18 @@ export function SeguimientoSection({ profile }) {
 
       {/* Antes que los indicadores y que cualquier filtro: es lo primero que
           tiene que ver quien abre la pantalla. */}
+      <CabeceraMiLista
+        modo={modo} setModo={setModo}
+        mios={misPendientes} total={rawRows.length}
+        tomando={tomando} onTomar={tomarMiLista} onSoltar={soltarMiLista}
+        error={errorLista}
+      />
+
       <BandaUrgentes
         filas={urgentesAbiertos}
         onUpdateStatus={updateStatus}
         rowErrors={rowErrors}
+        miId={miId}
       />
 
       <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr 1fr" : "repeat(4,1fr)", gap: 16, marginBottom: 24 }}>
@@ -1247,12 +1395,22 @@ export function SeguimientoSection({ profile }) {
       )}
 
       {!loading && !error && pageItems.length === 0 && (
-        <EmptyState
-          title="Sin conversaciones para estos filtros"
-          description={rawRows.length > 0
-            ? "Ninguna conversación del rango elegido cumple los filtros actuales. Amplíe el rango de fechas o quite alguno de los filtros."
-            : "No hay conversaciones que califiquen para seguimiento en este rango de fechas."}
-        />
+        modo === "mias" && misPendientes === 0 ? (
+          // En "Mi lista" el vacío no es un problema de filtros: es que
+          // todavía no tomó leads. Decirle que amplíe el rango lo mandaría a
+          // buscar donde no está la solución.
+          <EmptyState
+            title="Su lista está vacía"
+            description={`Tome ${LISTA_DEL_DIA} leads del principio de la cola con el botón de arriba. Son los de mayor prioridad que nadie más tiene asignados.`}
+          />
+        ) : (
+          <EmptyState
+            title="Sin conversaciones para estos filtros"
+            description={rawRows.length > 0
+              ? "Ninguna conversación del rango elegido cumple los filtros actuales. Amplíe el rango de fechas o quite alguno de los filtros."
+              : "No hay conversaciones que califiquen para seguimiento en este rango de fechas."}
+          />
+        )
       )}
 
       {!loading && !error && pageItems.length > 0 && (
@@ -1263,6 +1421,7 @@ export function SeguimientoSection({ profile }) {
               group={group}
               onUpdateStatus={updateStatus}
               error={rowErrors[group.latest.id]}
+              miId={miId}
             />
           ))}
         </div>
