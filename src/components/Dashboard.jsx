@@ -4,6 +4,8 @@ import { COLORS } from "../constants/colors.js";
 import { useIsMobile } from "../hooks/useIsMobile.js";
 import { Logo } from "./ui/Logo.jsx";
 import { Sidebar, MobileDrawer } from "./layout/Sidebar.jsx";
+import { AvisoVersionNueva } from "./ui/AvisoVersionNueva.jsx";
+import { useVersionNueva } from "../hooks/useVersionNueva.js";
 import { DashboardHome } from "./sections/DashboardHome.jsx";
 import { MetricsSection } from "./sections/MetricsSection.jsx";
 import { SofiaMetricsSection } from "./sections/SofiaMetricsSection.jsx";
@@ -48,6 +50,7 @@ export function Dashboard({ onLogout, profile }) {
   const [active, setActive] = useState("inicio");
   const [drawerOpen, setDrawerOpen] = useState(false);
   const isMobile = useIsMobile();
+  const hayVersionNueva = useVersionNueva();
   const openDrawer = useCallback(() => setDrawerOpen(true), []);
   const closeDrawer = useCallback(() => setDrawerOpen(false), []);
 
@@ -93,6 +96,7 @@ export function Dashboard({ onLogout, profile }) {
   if (isMobile) {
     return (
       <div style={{ minHeight: "100vh", background: COLORS.bg, fontFamily: "'Manrope', sans-serif" }}>
+        <AvisoVersionNueva visible={hayVersionNueva} />
         <div style={{
           display: "flex", alignItems: "center", justifyContent: "space-between",
           padding: "16px 20px", background: COLORS.panel, borderBottom: `1px solid ${COLORS.border}`,
@@ -130,6 +134,7 @@ export function Dashboard({ onLogout, profile }) {
 
   return (
     <div style={{ display: "flex", minHeight: "100vh", background: COLORS.bg, fontFamily: "'Manrope', sans-serif" }}>
+      <AvisoVersionNueva visible={hayVersionNueva} />
       <Sidebar active={active} setActive={navigate} onLogout={onLogout} profile={profile} />
       <div style={{ flex: 1, minWidth: 0, padding: "36px 40px", ...dashboardInAnim }} onAnimationEnd={() => setDashDone(true)}>
         <div style={{ marginBottom: 32 }}>
