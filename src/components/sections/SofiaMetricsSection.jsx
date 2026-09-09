@@ -13,16 +13,15 @@ import { FilterSelect } from "../ui/FilterSelect.jsx";
 import { useIsMobile } from "../../hooks/useIsMobile.js";
 import { supabase } from "../../lib/supabase.js";
 
-// Los datos reales de sofia_conversations arrancan acá — igual que en
-// LeadsCalientesSection, un rango anterior a esta fecha no tiene nada que
-// mostrar y hay que avisarlo en vez de dejar una gráfica vacía sin explicar.
+// Los datos reales de sofia_conversations arrancan acá: un rango anterior a
+// esta fecha no tiene nada que mostrar y hay que avisarlo en vez de dejar una
+// gráfica vacía sin explicar.
 const SOFIA_DATA_LIVE_SINCE = "2026-07-26";
 
 // created_at se guarda en UTC, pero el equipo opera en hora de Costa Rica
 // (UTC-6, sin horario de verano) — bucketear o elegir rangos por fecha UTC
 // corre "hoy" hasta 6 horas adelante y desplaza conversaciones al día
-// siguiente. Mismo patrón que ya usan LeadsCalientesSection y
-// daily-analysis.js.
+// siguiente. Mismo patrón que ya usa daily-analysis.js.
 function crDateStr(date) {
   return date.toLocaleDateString("en-CA", { timeZone: "America/Costa_Rica" });
 }

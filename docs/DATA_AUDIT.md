@@ -71,8 +71,8 @@ Claude en el Worker `cec-sofia-whatsapp`.
 | Contactados esta semana | `sofia_followup_status` | `estado='contactado'` | ⚫ | **0 filas en toda la historia** | El módulo no se usa |
 | Agendados | `sofia_followup_status` | `estado='agendo'` | ⚫ | **0 filas** | El módulo no se usa |
 | Score de Seguimiento | Vista `sofia_followup_queue` | SQL, servidor | 🟢 | Se ordena en Postgres sobre toda la cola | Correcto |
-| Score de Leads Potenciales | `LeadsCalientesSection.jsx` | JS, navegador | 🔴 | **Fórmula distinta a la de Seguimiento** y se ordena solo dentro de las 20 filas de la página, que vienen ordenadas por fecha. Un lead de score alto de hace semanas es inalcanzable | Aviso agregado en pantalla; consolidar en una sola definición (P0) |
-| "Última actividad" en Leads | `created_at` | — | 🔴→🟢 | Mostraba el **primer** contacto rotulado como última actividad, y le restaba hasta 17 de los 20 puntos de recencia a leads activos. Mismo bug ya corregido en Pacientes | **Corregido**: usa `updated_at` |
+| Score de Leads Potenciales | ~~`LeadsCalientesSection.jsx`~~ | JS, navegador | 🔴→⚫ | **Fórmula distinta a la de Seguimiento**: el 31,1% de los 3.281 leads compartidos cambiaba de tramo (alto/medio/bajo) según la pantalla, con hasta 42 puntos de diferencia. Además se ordenaba solo dentro de las 20 filas de la página | **Resuelto eliminando la sección**: queda un único score, el de la vista. Su desglose "por qué este puntaje" se rescató a Seguimiento |
+| ~~"Última actividad" en Leads~~ | `created_at` | — | 🔴→⚫ | Mostraba el **primer** contacto rotulado como última actividad, y le restaba hasta 17 de los 20 puntos de recencia a leads activos. Mismo bug ya corregido en Pacientes | **Corregido**: usa `updated_at` |
 
 ## Recomendaciones (análisis con IA)
 

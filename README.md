@@ -23,7 +23,6 @@ src/
       MetricsSection.jsx        — Métricas Meta (datos reales de Meta Ads)
       SofiaMetricsSection.jsx   — Métricas Sofía: volumen, escalación, temas, calidad
       RecommendationsSection.jsx— análisis por período que cruza Meta con Sofía
-      LeadsCalientesSection.jsx — Leads Potenciales, ordenados por score
       SeguimientoSection.jsx    — cola de conversaciones abiertas sin venta
       PacientesSection.jsx      — base de pacientes: teléfono, interés, actividad
       SofiaAuditSection.jsx     — autoauditorías de Sofía
@@ -86,7 +85,7 @@ Login, dashboard, sidebar y "Configurar a Sofía" contra Supabase.
 **Fase 2 — Conversaciones de Sofía** *(hecho)*
 `sofia_conversations` recibe datos del Worker desde el 2026-07-26. Al
 2026-09-03 son **10.983** conversaciones reales, repartidas en Métricas
-Sofía, Leads Potenciales, Seguimiento y Pacientes.
+Sofía, Seguimiento y Pacientes.
 
 **Fase 3 — Conectar Meta y Google** *(hecho — Meta en vivo; Google se retiró)*
 `MetricsSection.jsx` ("Métricas Meta" en el nav) corre con datos reales de Meta Ads, sin mock data (CPL, gráfico gasto vs leads, insight automático). Google Ads/Analytics se integró primero (commit `8da8f0b`) pero se quitó del dashboard por decisión de producto — "resultó poco práctico" (commit `2039363`), no por falta de acceso. `DATA_SOURCES` en `nav.js` solo lista `meta` y `sofia`, ambos `connected: true`.
